@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${WAREXO_GIT_URL:?WAREXO_GIT_URL is required}"
+WAREXO_GIT_REF="${WAREXO_GIT_REF:-master}"
+
+if [ -n "$(find /var/www/html -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
+    echo "/var/www/html is not empty; refusing initial clone" >&2
+    exit 1
+fi
+
+sudo -u developer -H git clone "$WAREXO_GIT_URL" /var/www/html
+cd /var/www/html
+sudo -u developer -H git fetch origin --prune
+sudo -u developer -H git checkout "$WAREXO_GIT_REF" || sudo -u developer -H git checkout --detach "$WAREXO_GIT_REF"
+
+chown -R developer:www-data /var/www/html

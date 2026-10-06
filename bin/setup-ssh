@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+install -d -m 0700 -o developer -g developer /home/developer/.ssh
+
+if [ -n "${SSH_AUTHORIZED_KEYS:-}" ]; then
+    printf '%s\n' "$SSH_AUTHORIZED_KEYS" > /home/developer/.ssh/authorized_keys
+    chown developer:developer /home/developer/.ssh/authorized_keys
+    chmod 0600 /home/developer/.ssh/authorized_keys
+fi
+
+if [ -n "${WAREXO_GIT_PRIVATE_KEY:-}" ]; then
+    printf '%s\n' "$WAREXO_GIT_PRIVATE_KEY" > /home/developer/.ssh/id_ed25519
+    chown developer:developer /home/developer/.ssh/id_ed25519
+    chmod 0600 /home/developer/.ssh/id_ed25519
+fi
+
+if [ -n "${WAREXO_GIT_KNOWN_HOSTS:-}" ]; then
+    printf '%s\n' "$WAREXO_GIT_KNOWN_HOSTS" > /home/developer/.ssh/known_hosts
+    chown developer:developer /home/developer/.ssh/known_hosts
+    chmod 0644 /home/developer/.ssh/known_hosts
+fi

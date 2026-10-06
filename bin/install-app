@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /var/www/html
+
+sudo -u developer -H composer install --prefer-dist --no-interaction --no-progress
+
+mkdir -p app/cache app/logs
+chown -R developer:www-data app/cache app/logs
+chmod -R ug+rwX app/cache app/logs
+
+rm -rf app/cache/prod/*
+
+if [ -f app/console ]; then
+    sudo -u developer -H php app/console cache:warmup --env=prod || true
+fi

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APP_DIR=/var/www/html
+PARAMETERS="$APP_DIR/app/config/parameters.yml"
+
+mkdir -p "$APP_DIR/app/config"
+
+yaml_quote() {
+    local value="${1:-}"
+    value="${value//'/''}"
+    printf "'%s'" "$value"
+}
+
+cat > "$PARAMETERS" <<EOF
+parameters:
+    database_driver: pdo_mysql
+    database_host: $(yaml_quote "${DB_HOST:-db}")
+    database_port: ${DB_PORT:-3306}
+    database_name: $(yaml_quote "${DB_NAME:-warexo}")
+    database_user: $(yaml_quote "${DB_USER:-warexo}")
+    database_password: $(yaml_quote "${DB_PASSWORD:-}")
+    mailer_transport: $(yaml_quote "${MAILER_TRANSPORT:-smtp}")
+    mailer_host: $(yaml_quote "${MAILER_HOST:-mailpit}")
+    mailer_user: $(yaml_quote "${MAILER_USER:-}")
+    mailer_password: $(yaml_quote "${MAILER_PASSWORD:-}")
+    locale: $(yaml_quote "${WAREXO_LOCALE:-de_DE}")
+    secret: $(yaml_quote "${WAREXO_SECRET:-dev-secret-change-me}")
+    database_path: null
+    cookielifetime: ${WAREXO_COOKIE_LIFETIME:-86400}
+    gcmaxlifetime: ${WAREXO_GC_MAX_LIFETIME:-1440}
+    cookiesecure: ${WAREXO_COOKIE_SECURE:-true}
+EOF
+
+chown developer:www-data "$PARAMETERS"
+chmod 0640 "$PARAMETERS"

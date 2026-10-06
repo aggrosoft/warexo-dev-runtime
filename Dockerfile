@@ -4,12 +4,14 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
+        curl \
         git \
         openssh-server \
+        rsync \
+        sudo \
         unzip \
         zip \
         zstd \
-        rsync \
         default-mysql-client \
         libicu-dev \
         libzip-dev \

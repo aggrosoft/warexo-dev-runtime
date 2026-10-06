@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ "$#" -ne 1 ]; then
+    echo "Usage: warexo-checkout <branch|tag|commit>" >&2
+    exit 2
+fi
+
+cd /var/www/html
+ref="$1"
+
+git fetch origin --prune
+git checkout "$ref" || git checkout --detach "$ref"
+
+composer install --prefer-dist --no-interaction --no-progress
+
+rm -rf app/cache/prod/*
+php app/console cache:warmup --env=prod || true
+
+echo "Warexo is now on: $(git rev-parse --short HEAD)"

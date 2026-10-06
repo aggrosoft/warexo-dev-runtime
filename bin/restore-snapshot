@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+: "${WAREXO_SNAPSHOT_URL:?WAREXO_SNAPSHOT_URL is required}"
+
+tmp="$(mktemp --suffix=.sql.zst)"
+trap 'rm -f "$tmp"' EXIT
+
+auth_args=()
+if [ -n "${WAREXO_SNAPSHOT_TOKEN:-}" ]; then
+    auth_args=(-H "Authorization: Bearer ${WAREXO_SNAPSHOT_TOKEN}")
+fi
+
+curl -fsSL "${auth_args[@]}" "$WAREXO_SNAPSHOT_URL" -o "$tmp"
+
+zstd -dc "$tmp" | mariadb \
+    -h "${DB_HOST:-db}" \
+    -P "${DB_PORT:-3306}" \
+    -u "${DB_USER:-warexo}" \
+    -p"${DB_PASSWORD}" \
+    "${DB_NAME:-warexo}"

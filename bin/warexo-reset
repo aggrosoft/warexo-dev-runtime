@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "warexo-reset is intentionally not implemented yet."
+echo "Next step: reset DB from snapshot + reset source to WAREXO_GIT_REF."
+exit 2

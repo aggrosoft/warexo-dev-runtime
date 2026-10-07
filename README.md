@@ -18,6 +18,8 @@ Current baseline:
 
 ## Required variables
 
+For a normal development instance only the external access settings need to be supplied:
+
 ```env
 WAREXO_GIT_URL=git@git.example.com:warexo/warexo.git
 WAREXO_GIT_REF=master
@@ -25,11 +27,10 @@ WAREXO_GIT_REF=master
 WAREXO_GIT_PRIVATE_KEY=...
 WAREXO_GIT_KNOWN_HOSTS=...
 
-DB_PASSWORD=...
-DB_ROOT_PASSWORD=...
-
 SSH_AUTHORIZED_KEYS=...
 ```
+
+Database credentials and the Symfony secret are generated automatically and persisted in the `warexo-secrets` volume.
 
 Optional snapshot restore during first bootstrap:
 

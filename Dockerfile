@@ -2,7 +2,17 @@ FROM php:7.4-apache-bullseye
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update \
+# Debian 11 (Bullseye) reached LTS EOL on 2026-08-31 and its repositories
+# are now archived. Point APT at the archive explicitly so this legacy
+# PHP 7.4 runtime remains reproducible.
+RUN printf '%s\n' \
+      'deb [check-valid-until=no] http://archive.debian.org/debian bullseye main' \
+      'deb [check-valid-until=no] http://archive.debian.org/debian bullseye-updates main' \
+      'deb [check-valid-until=no] http://archive.debian.org/debian-security bullseye-security main' \
+      > /etc/apt/sources.list \
+    && rm -f /etc/apt/sources.list.d/*
+
+RUN apt-get -o Acquire::Check-Valid-Until=false update \
     && apt-get install -y --no-install-recommends \
         curl \
         default-mysql-client \

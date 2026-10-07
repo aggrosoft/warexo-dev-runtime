@@ -11,17 +11,17 @@ services:
 
       DB_HOST: db
       DB_PORT: 3306
-      DB_NAME: "${DB_NAME:-warexo}"
-      DB_USER: "${DB_USER:-warexo}"
-      DB_PASSWORD: "${DB_PASSWORD}"
+      DB_NAME: warexo
+      DB_USER: warexo
+      DB_PASSWORD_FILE: /run/secrets/db_password
 
       MAILER_TRANSPORT: "${MAILER_TRANSPORT:-smtp}"
       MAILER_HOST: "${MAILER_HOST:-mailpit}"
-      MAILER_USER: "${MAILER_USER:-}"
-      MAILER_PASSWORD: "${MAILER_PASSWORD:-}"
+      MAILER_USER: ""
+      MAILER_PASSWORD: ""
 
       WAREXO_LOCALE: "${WAREXO_LOCALE:-de_DE}"
-      WAREXO_SECRET: "${WAREXO_SECRET:-dev-secret-change-me}"
+      WAREXO_SECRET_FILE: /run/secrets/warexo_secret
       WAREXO_COOKIE_LIFETIME: "${WAREXO_COOKIE_LIFETIME:-86400}"
       WAREXO_GC_MAX_LIFETIME: "${WAREXO_GC_MAX_LIFETIME:-1440}"
       WAREXO_COOKIE_SECURE: "${WAREXO_COOKIE_SECURE:-true}"
@@ -33,6 +33,7 @@ services:
     volumes:
       - warexo-code:/var/www/html
       - warexo-state:/var/lib/warexo
+      - warexo-secrets:/run/secrets
     depends_on:
       db:
         condition: service_healthy
@@ -43,16 +44,28 @@ services:
     image: mariadb:10.11
     restart: unless-stopped
     environment:
-      MARIADB_DATABASE: "${DB_NAME:-warexo}"
-      MARIADB_USER: "${DB_USER:-warexo}"
-      MARIADB_PASSWORD: "${DB_PASSWORD}"
+      MARIADB_DATABASE: warexo
+      MARIADB_USER: warexo
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
       MARIADB_RANDOM_ROOT_PASSWORD: "1"
     volumes:
       - warexo-db:/var/lib/mysql
+      - warexo-secrets:/run/secrets
+    entrypoint:
+      - /bin/bash
+      - -lc
+      - |
+        set -e
+        mkdir -p /run/secrets
+        if [ ! -s /run/secrets/db_password ]; then
+          umask 077
+          tr -dc 'A-Za-z0-9' </dev/urandom | head -c 40 > /run/secrets/db_password
+        fi
+        exec /usr/local/bin/docker-entrypoint.sh mariadbd
     healthcheck:
       test:
         - CMD-SHELL
-        - 'mariadb-admin ping -h 127.0.0.1 -u "$$MARIADB_USER" -p"$$MARIADB_PASSWORD" --silent'
+        - 'mariadb-admin ping -h 127.0.0.1 -u warexo -p"$$(cat /run/secrets/db_password)" --silent'
       interval: 10s
       timeout: 5s
       retries: 20
@@ -69,6 +82,7 @@ volumes:
   warexo-code:
   warexo-state:
   warexo-db:
+  warexo-secrets:
 
 networks:
   warexo:

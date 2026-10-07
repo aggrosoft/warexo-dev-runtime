@@ -46,11 +46,13 @@ services:
       MARIADB_DATABASE: "${DB_NAME:-warexo}"
       MARIADB_USER: "${DB_USER:-warexo}"
       MARIADB_PASSWORD: "${DB_PASSWORD}"
-      MARIADB_ROOT_PASSWORD: "${DB_ROOT_PASSWORD}"
+      MARIADB_RANDOM_ROOT_PASSWORD: "1"
     volumes:
       - warexo-db:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p$$MARIADB_ROOT_PASSWORD --silent"]
+      test:
+        - CMD-SHELL
+        - 'mariadb-admin ping -h 127.0.0.1 -u "$$MARIADB_USER" -p"$$MARIADB_PASSWORD" --silent'
       interval: 10s
       timeout: 5s
       retries: 20

@@ -4,7 +4,29 @@ set -euo pipefail
 APP_DIR=/var/www/html
 PARAMETERS="$APP_DIR/app/config/parameters.yml"
 
-mkdir -p "$APP_DIR/app/config"
+mkdir -p "$APP_DIR/app/config" /run/secrets
+
+read_or_create_secret() {
+    local file="$1"
+    local length="$2"
+
+    if [ ! -s "$file" ]; then
+        umask 077
+        tr -dc 'A-Za-z0-9' </dev/urandom | head -c "$length" > "$file"
+    fi
+
+    cat "$file"
+}
+
+DB_PASSWORD="${DB_PASSWORD:-}"
+if [ -n "${DB_PASSWORD_FILE:-}" ]; then
+    DB_PASSWORD="$(cat "$DB_PASSWORD_FILE")"
+fi
+
+WAREXO_SECRET="${WAREXO_SECRET:-}"
+if [ -n "${WAREXO_SECRET_FILE:-}" ]; then
+    WAREXO_SECRET="$(read_or_create_secret "$WAREXO_SECRET_FILE" 64)"
+fi
 
 yaml_quote() {
     local value="${1:-}"
@@ -19,13 +41,13 @@ parameters:
     database_port: ${DB_PORT:-3306}
     database_name: $(yaml_quote "${DB_NAME:-warexo}")
     database_user: $(yaml_quote "${DB_USER:-warexo}")
-    database_password: $(yaml_quote "${DB_PASSWORD:-}")
+    database_password: $(yaml_quote "$DB_PASSWORD")
     mailer_transport: $(yaml_quote "${MAILER_TRANSPORT:-smtp}")
     mailer_host: $(yaml_quote "${MAILER_HOST:-mailpit}")
     mailer_user: $(yaml_quote "${MAILER_USER:-}")
     mailer_password: $(yaml_quote "${MAILER_PASSWORD:-}")
     locale: $(yaml_quote "${WAREXO_LOCALE:-de_DE}")
-    secret: $(yaml_quote "${WAREXO_SECRET:-dev-secret-change-me}")
+    secret: $(yaml_quote "$WAREXO_SECRET")
     database_path: null
     cookielifetime: ${WAREXO_COOKIE_LIFETIME:-86400}
     gcmaxlifetime: ${WAREXO_GC_MAX_LIFETIME:-1440}

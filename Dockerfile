@@ -1,43 +1,42 @@
-FROM php:7.4-apache
+FROM php:7.4-apache-bullseye
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         curl \
+        default-mysql-client \
         git \
+        libcurl4-openssl-dev \
+        libfreetype6-dev \
+        libicu-dev \
+        libjpeg62-turbo-dev \
+        libonig-dev \
+        libpng-dev \
+        libxml2-dev \
+        libzip-dev \
         openssh-server \
         rsync \
         sudo \
         unzip \
         zip \
         zstd \
-        default-mysql-client \
-        libicu-dev \
-        libzip-dev \
-        libpng-dev \
-        libjpeg62-turbo-dev \
-        libfreetype6-dev \
-        libxml2-dev \
-        libcurl4-openssl-dev \
-        libonig-dev \
-        libkrb5-dev \
-        libc-client2007e-dev \
-    && docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-configure imap --with-kerberos --with-imap-ssl \
-    && docker-php-ext-install -j"$(nproc)" \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg
+
+RUN docker-php-ext-install -j"$(nproc)" \
         bcmath \
         curl \
         gd \
-        imap \
         intl \
         mbstring \
         mysqli \
         pdo_mysql \
         soap \
-        zip \
-    && a2enmod rewrite headers \
-    && rm -rf /var/lib/apt/lists/*
+        zip
+
+RUN a2enmod rewrite headers
 
 RUN php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');" \
     && php /tmp/composer-setup.php --1 --install-dir=/usr/local/bin --filename=composer \

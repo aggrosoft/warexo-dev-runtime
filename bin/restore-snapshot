@@ -11,11 +11,16 @@ if [ -n "${WAREXO_SNAPSHOT_TOKEN:-}" ]; then
     auth_args=(-H "Authorization: Bearer ${WAREXO_SNAPSHOT_TOKEN}")
 fi
 
+DB_PASSWORD="${DB_PASSWORD:-}"
+if [ -n "${DB_PASSWORD_FILE:-}" ]; then
+    DB_PASSWORD="$(cat "$DB_PASSWORD_FILE")"
+fi
+
 curl -fsSL "${auth_args[@]}" "$WAREXO_SNAPSHOT_URL" -o "$tmp"
 
 zstd -dc "$tmp" | mariadb \
     -h "${DB_HOST:-db}" \
     -P "${DB_PORT:-3306}" \
     -u "${DB_USER:-warexo}" \
-    -p"${DB_PASSWORD}" \
+    -p"$DB_PASSWORD" \
     "${DB_NAME:-warexo}"

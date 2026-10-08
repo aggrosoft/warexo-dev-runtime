@@ -22,3 +22,37 @@ if [ -n "${WAREXO_GIT_KNOWN_HOSTS:-}" ]; then
     chown developer:developer /home/developer/.ssh/known_hosts
     chmod 0644 /home/developer/.ssh/known_hosts
 fi
+
+# The Coolify SSH bridge may enter the container as root, while the initial
+# clone runs as developer. Both users must be able to use the same deploy key.
+# Do not duplicate the private key: root can read developer's key directly.
+: "${WAREXO_GIT_URL:?WAREXO_GIT_URL is required}"
+if [[ "${WAREXO_GIT_URL}" =~ ^ssh://([^/]+) ]]; then
+    authority="${BASH_REMATCH[1]}"
+    host_port="${authority##*@}"
+    git_host="${host_port%%:*}"
+else
+    echo "WAREXO_GIT_URL must be an ssh:// URL" >&2
+    exit 1
+fi
+
+# This host-specific configuration leaves other SSH connections untouched.
+for ssh_home in /home/developer /root; do
+    if [ "$ssh_home" = /root ]; then
+        install -d -m 0700 -o root -g root "$ssh_home/.ssh"
+    fi
+    config="$ssh_home/.ssh/config"
+    cat > "$config" <<EOF
+Host $git_host
+    IdentityFile /home/developer/.ssh/id_ed25519
+    IdentitiesOnly yes
+    BatchMode yes
+    UserKnownHostsFile /home/developer/.ssh/known_hosts
+EOF
+    if [ "$ssh_home" = /root ]; then
+        chown root:root "$config"
+    else
+        chown developer:developer "$config"
+    fi
+    chmod 0600 "$config"
+done

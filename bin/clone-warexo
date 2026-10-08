@@ -9,7 +9,7 @@ if [ -n "$(find /var/www/html -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)"
     exit 1
 fi
 
-export GIT_SSH_COMMAND="ssh -i /home/developer/.ssh/id_ed25519 -o IdentitiesOnly=yes -o PasswordAuthentication=no -o BatchMode=yes"
+export GIT_SSH_COMMAND="ssh -i /home/developer/.ssh/id_ed25519 -o IdentitiesOnly=yes -o PasswordAuthentication=no -o BatchMode=yes -o CheckHostIP=no"
 
 if [ -s /home/developer/.ssh/known_hosts ]; then
     export GIT_SSH_COMMAND="$GIT_SSH_COMMAND -o UserKnownHostsFile=/home/developer/.ssh/known_hosts -o StrictHostKeyChecking=yes"

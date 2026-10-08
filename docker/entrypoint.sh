@@ -26,11 +26,17 @@ bootstrap() {
     fi
 }
 
+# Repair Symfony writable directories on every start, including already initialized instances.
+if ! /opt/warexo/bin/fix-runtime-permissions; then
+    echo "[warexo-dev] WARNING: Could not normalize Symfony runtime permissions." >&2
+fi
+
 echo "[warexo-dev] Starting Warexo bootstrap..."
 
 if bootstrap; then
     rm -f /var/lib/warexo/bootstrap-failed
     touch /var/lib/warexo/bootstrap-ok
+    /opt/warexo/bin/fix-runtime-permissions || true
     echo "[warexo-dev] Bootstrap completed."
 else
     status=$?

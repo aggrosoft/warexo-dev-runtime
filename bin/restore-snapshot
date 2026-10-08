@@ -3,7 +3,7 @@ set -euo pipefail
 
 : "${WAREXO_SNAPSHOT_URL:?WAREXO_SNAPSHOT_URL is required}"
 
-tmp="$(mktemp --suffix=.sql.zst)"
+tmp="$(mktemp)"
 trap 'rm -f "$tmp"' EXIT
 
 auth_args=()
@@ -16,11 +16,27 @@ if [ -n "${DB_PASSWORD_FILE:-}" ]; then
     DB_PASSWORD="$(cat "$DB_PASSWORD_FILE")"
 fi
 
+echo "[warexo-dev] Downloading database snapshot..."
 curl -fsSL "${auth_args[@]}" "$WAREXO_SNAPSHOT_URL" -o "$tmp"
 
-zstd -dc "$tmp" | mariadb \
-    -h "${DB_HOST:-db}" \
-    -P "${DB_PORT:-3306}" \
-    -u "${DB_USER:-warexo}" \
-    -p"$DB_PASSWORD" \
-    "${DB_NAME:-warexo}"
+import_sql() {
+    mariadb \
+        -h "${DB_HOST:-db}" \
+        -P "${DB_PORT:-3306}" \
+        -u "${DB_USER:-warexo}" \
+        -p"$DB_PASSWORD" \
+        "${DB_NAME:-warexo}"
+}
+
+# zstd frame magic: 28 B5 2F FD
+magic="$(od -An -tx1 -N4 "$tmp" | tr -d ' \n')"
+
+if [ "$magic" = "28b52ffd" ]; then
+    echo "[warexo-dev] Importing zstd-compressed SQL snapshot..."
+    zstd -dc "$tmp" | import_sql
+else
+    echo "[warexo-dev] Importing plain SQL snapshot..."
+    import_sql < "$tmp"
+fi
+
+echo "[warexo-dev] Database snapshot import completed."

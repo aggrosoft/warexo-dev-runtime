@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cd /var/www/html
+
+# Nothing to do before the repository exists.
+if [ ! -d app ]; then
+    exit 0
+fi
+
+mkdir -p app/cache/prod/http_cache app/logs
+
+# Apache runs as www-data, developers work as developer.
+# Keep both able to write Symfony's runtime directories.
+chown -R developer:www-data app/cache app/logs
+chmod -R ug+rwX app/cache app/logs
+
+# New directories inherit the www-data group.
+find app/cache app/logs -type d -exec chmod g+s {} +

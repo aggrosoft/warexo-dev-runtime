@@ -2,9 +2,11 @@ FROM php:7.4-apache-bullseye
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Debian 11 (Bullseye) reached LTS EOL on 2026-08-31 and its repositories
-# are now archived. Point APT at the archive explicitly so this legacy
-# PHP 7.4 runtime remains reproducible.
+LABEL org.opencontainers.image.title="Warexo Dev Runtime" \
+      org.opencontainers.image.description="Disposable remote development runtime for Warexo" \
+      org.opencontainers.image.source="https://github.com/aggrosoft/warexo-dev-runtime"
+
+# Debian 11 (Bullseye) is archived. PHP 7.4 is required by the legacy Warexo runtime.
 RUN printf '%s\n' \
       'deb [check-valid-until=no] http://archive.debian.org/debian bullseye main' \
       'deb [check-valid-until=no] http://archive.debian.org/debian bullseye-updates main' \
@@ -25,7 +27,7 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update \
         libpng-dev \
         libxml2-dev \
         libzip-dev \
-        openssh-server \
+        openssh-client \
         rsync \
         sudo \
         unzip \
@@ -52,13 +54,12 @@ RUN php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php')
     && php /tmp/composer-setup.php --1 --install-dir=/usr/local/bin --filename=composer \
     && rm /tmp/composer-setup.php
 
-RUN mkdir -p /run/sshd /opt/warexo/bin /var/www/html \
+RUN mkdir -p /opt/warexo/bin /var/www/html \
     && useradd -m -s /bin/bash developer \
     && usermod -aG www-data developer
 
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 COPY docker/php.ini /usr/local/etc/php/conf.d/warexo.ini
-COPY docker/sshd_config /etc/ssh/sshd_config
 COPY docker/entrypoint.sh /usr/local/bin/warexo-entrypoint
 COPY bin/ /opt/warexo/bin/
 

@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-echo "warexo-reset is intentionally not implemented yet."
-echo "Next step: reset DB from snapshot + reset source to WAREXO_GIT_REF."
+cat >&2 <<'EOF'
+warexo-reset is intentionally not destructive inside the running container.
+
+Warexo development instances are disposable. To return to a clean installation:
+1. delete the Coolify Compose resource and its named volumes
+2. create a new resource from compose.coolify.example.yaml
+3. run the Warexo installer against the fresh database
+
+This avoids mixing database schemas from different Git revisions.
+EOF
 exit 2

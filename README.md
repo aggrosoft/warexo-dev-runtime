@@ -1,83 +1,162 @@
 # Warexo Dev Runtime
 
-Reproducible development runtime for legacy Warexo installations.
+Disposable Warexo development environments for Coolify.
 
-## Scope
+This repository publishes the runtime image:
 
-This repository provides the runtime only. The Warexo application itself is cloned from its existing Git remote into a persistent volume and can then be edited directly over SSH / VS Code Remote SSH.
-
-Current baseline:
-
-- PHP 7.4
-- Apache
-- MariaDB 10.11
-- Composer 1
-- Symfony prod environment
-- Mailpit for outgoing mail
-- no Warexo cron jobs enabled by default
-
-## Required variables
-
-For a normal development instance only the external access settings need to be supplied:
-
-```env
-WAREXO_GIT_URL=git@git.example.com:warexo/warexo.git
-WAREXO_GIT_REF=master
-
-WAREXO_GIT_PRIVATE_KEY=...
-WAREXO_GIT_KNOWN_HOSTS=...
-
-SSH_AUTHORIZED_KEYS=...
+```text
+ghcr.io/aggrosoft/warexo-dev-runtime:main
 ```
 
-Database credentials and the Symfony secret are generated automatically and persisted in the `warexo-secrets` volume.
+Do **not** deploy this repository as a normal GitHub application in Coolify. Create a **Docker Compose** resource and use `compose.coolify.example.yaml` as the template.
 
-Optional snapshot restore during first bootstrap:
+## Runtime
 
-```env
-WAREXO_SNAPSHOT_URL=https://example.invalid/warexo-dev.sql.zst
-WAREXO_SNAPSHOT_TOKEN=
-```
+The image intentionally keeps the legacy application stack stable:
 
-## First bootstrap
+- PHP 7.4 + Apache
+- Symfony production environment
+- Composer 1 for the committed legacy lock file
+- MariaDB 10.11 in the Coolify template
+- Mailpit for development mail
+- no Warexo cron jobs by default
+- Git working copy persisted in a named volume
 
-On the first start the application container:
-
-1. configures SSH
-2. clones the Warexo repository
-3. checks out `WAREXO_GIT_REF`
-4. generates `app/config/parameters.yml`
-5. optionally restores a database snapshot
-6. runs `composer install`
-7. warms the Symfony prod cache
-8. starts Apache and SSH
-
-Normal container restarts do not reset the source checkout.
-
-## Remote development
-
-The working tree is directly available at:
+The Warexo source itself is not part of this repository. It is cloned from the configured self-hosted Git remote into:
 
 ```text
 /var/www/html
 ```
 
-Use the `developer` user over SSH.
+## Create a new instance in Coolify
 
-To switch the running application to another branch, tag, or commit:
+1. Create a **Docker Compose** resource.
+2. Paste/use `compose.coolify.example.yaml`.
+3. Set the required Git variables.
+4. Deploy.
 
-```bash
-/opt/warexo/bin/warexo-checkout feature/my-change
+The `warexo` service exposes port 80 through Coolify using:
+
+```text
+SERVICE_URL_WAREXO_80=/
+SERVICE_FQDN_WAREXO
 ```
 
-## Important safety default
+Coolify generates the internal database passwords and application secret through its `SERVICE_PASSWORD_*` / `SERVICE_BASE64_*` variables.
 
-Warexo cron jobs are intentionally not installed or enabled. The production cron set contains commands that import orders, send mail, fetch external mail, download data, export products and run subscriptions. These must be classified before any automatic dev cron profile is introduced.
+## Required environment
 
-## Next steps
+Only source-repository access is required for a blank development instance:
 
-- make snapshot restore production-ready
-- add deterministic reset command
-- sanitize copied production data
-- classify safe/unsafe cron jobs
-- verify legacy extension requirements against a real instance
+```env
+WAREXO_GIT_URL=ssh://user@git-host.example/path/to/warexo.git
+WAREXO_GIT_REF=master
+
+WAREXO_GIT_PRIVATE_KEY=...
+WAREXO_GIT_KNOWN_HOSTS=...
+```
+
+`WAREXO_GIT_PRIVATE_KEY` is the private SSH key used **from the Warexo container to the self-hosted repository host**. It is unrelated to developer SSH access.
+
+For non-standard SSH ports, use an SSH URL that contains the port and put the matching `[host]:port` entry into `WAREXO_GIT_KNOWN_HOSTS`.
+
+## Developer SSH / VS Code
+
+Remote access is handled by the central:
+
+```text
+aggrosoft/coolify-ssh-bridge
+```
+
+The Compose template enables it with:
+
+```env
+AGGRO_SSH_ENABLED=true
+```
+
+There are no SSHPiper labels, no per-instance `authorized_keys`, and no developer-facing SSH daemon in the Warexo image.
+
+The bridge enters the running Compose service through Docker exec. For this template the service name is:
+
+```text
+warexo
+```
+
+The working tree is:
+
+```text
+/var/www/html
+```
+
+VS Code server and Codex state have their own persistent volumes.
+
+## First bootstrap
+
+On first start the runtime:
+
+1. configures SSH access to the self-hosted Git repository
+2. clones Warexo into the persistent source volume
+3. checks out `WAREXO_GIT_REF`
+4. generates `app/config/parameters.yml`
+5. optionally restores a development database snapshot
+6. runs the committed Composer lock file
+7. warms the Symfony production cache
+8. starts Apache
+
+A failed bootstrap does not stop the container. The instance remains reachable for inspection and the next restart resumes incomplete initialization.
+
+The successful initialization marker is:
+
+```text
+/var/lib/warexo/initialized
+```
+
+## Database and application configuration
+
+The Coolify template generates:
+
+```text
+database: warexo
+user:     warexo
+password: SERVICE_PASSWORD_64_DB
+secret:   SERVICE_BASE64_64_APP
+```
+
+The runtime writes these values to the legacy:
+
+```text
+app/config/parameters.yml
+```
+
+Mail is redirected to the local `mailpit` service.
+
+## Git checkout
+
+To switch the running working copy:
+
+```bash
+/opt/warexo/bin/warexo-checkout feature/foo
+```
+
+This fetches the remote, checks out the requested branch/tag/commit, runs Composer install and rebuilds the Symfony cache.
+
+Normal container restarts do not reset or switch the working copy.
+
+## Database snapshot
+
+Optional variables:
+
+```env
+WAREXO_SNAPSHOT_URL=https://...
+WAREXO_SNAPSHOT_TOKEN=...
+```
+
+When configured on a fresh instance, the runtime downloads a `.sql.zst` snapshot and restores it before application setup.
+
+The next implementation step is the production-to-development snapshot pipeline with sanitization and a deterministic `warexo-reset` command.
+
+## Safety
+
+Production Warexo cron jobs are intentionally absent. The existing production schedule contains imports, mail delivery, mailbox polling, downloads, subscriptions and webshop exports. They must not start automatically in a cloned development database.
+
+External integrations will be classified and neutralized as part of the snapshot/sanitization work before cron profiles are introduced.

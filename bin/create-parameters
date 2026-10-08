@@ -29,9 +29,7 @@ if [ -n "${WAREXO_SECRET_FILE:-}" ]; then
 fi
 
 yaml_quote() {
-    local value="${1:-}"
-    value="${value//'/''}"
-    printf "'%s'" "$value"
+    php -r '$v = $argv[1]; echo "'"'"'" . str_replace("'"'"'", "'"'"''"'"'", $v) . "'"'"'";' "$1"
 }
 
 cat > "$PARAMETERS" <<EOF

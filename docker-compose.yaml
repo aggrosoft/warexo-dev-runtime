@@ -3,6 +3,8 @@ services:
     build:
       context: .
     restart: unless-stopped
+    stdin_open: true
+    tty: true
     expose:
       - "80"
     environment:
@@ -29,7 +31,6 @@ services:
       WAREXO_GC_MAX_LIFETIME: "${WAREXO_GC_MAX_LIFETIME:-1440}"
       WAREXO_COOKIE_SECURE: "${WAREXO_COOKIE_SECURE:-true}"
 
-      SSH_AUTHORIZED_KEYS: "${SSH_AUTHORIZED_KEYS:-}"
 
       WAREXO_SNAPSHOT_URL: "${WAREXO_SNAPSHOT_URL:-}"
       WAREXO_SNAPSHOT_TOKEN: "${WAREXO_SNAPSHOT_TOKEN:-}"

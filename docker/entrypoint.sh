@@ -14,35 +14,31 @@ bootstrap() {
         /opt/warexo/bin/clone-warexo
     fi
 
+    # Environment-specific config is regenerated on every start.
     /opt/warexo/bin/create-parameters
 
-    if [ ! -f /var/lib/warexo/initialized ]; then
-        if [ -n "${WAREXO_SNAPSHOT_URL:-}" ]; then
-            /opt/warexo/bin/restore-snapshot
-        fi
-
+    # Composer/application preparation only needs to complete once per disposable
+    # workspace. Database schema/data are intentionally NOT cloned here.
+    if [ ! -f /var/lib/warexo/runtime-initialized ]; then
         /opt/warexo/bin/install-app
-        touch /var/lib/warexo/initialized
+        touch /var/lib/warexo/runtime-initialized
     fi
+
+    /opt/warexo/bin/fix-runtime-permissions
 }
 
-# Repair Symfony writable directories on every start, including already initialized instances.
-if ! /opt/warexo/bin/fix-runtime-permissions; then
-    echo "[warexo-dev] WARNING: Could not normalize Symfony runtime permissions." >&2
-fi
-
-echo "[warexo-dev] Starting Warexo bootstrap..."
+echo "[warexo-dev] Starting Warexo runtime bootstrap..."
 
 if bootstrap; then
     rm -f /var/lib/warexo/bootstrap-failed
     touch /var/lib/warexo/bootstrap-ok
-    /opt/warexo/bin/fix-runtime-permissions || true
-    echo "[warexo-dev] Bootstrap completed."
+    echo "[warexo-dev] Runtime bootstrap completed."
+    echo "[warexo-dev] Fresh database is ready for the Warexo installer at /install.php."
 else
     status=$?
     rm -f /var/lib/warexo/bootstrap-ok
     printf '%s\n' "$status" > /var/lib/warexo/bootstrap-failed
-    echo "[warexo-dev] ERROR: Bootstrap failed with exit code $status." >&2
+    echo "[warexo-dev] ERROR: Runtime bootstrap failed with exit code $status." >&2
     echo "[warexo-dev] Container will stay up for inspection through Coolify/coolify-ssh-bridge." >&2
 fi
 

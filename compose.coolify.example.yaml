@@ -1,0 +1,90 @@
+services:
+  warexo:
+    image: ghcr.io/aggrosoft/warexo-dev-runtime:main
+    pull_policy: always
+    restart: unless-stopped
+
+    environment:
+      SERVICE_URL_WAREXO_80: /
+      SERVICE_FQDN_WAREXO: null
+
+      AGGRO_SSH_ENABLED: "true"
+
+      WAREXO_GIT_URL: ${WAREXO_GIT_URL:?Set Warexo Git SSH URL}
+      WAREXO_GIT_REF: ${WAREXO_GIT_REF:-master}
+      WAREXO_GIT_PRIVATE_KEY: ${WAREXO_GIT_PRIVATE_KEY:?Set SSH private key for the Warexo repository host}
+      WAREXO_GIT_KNOWN_HOSTS: ${WAREXO_GIT_KNOWN_HOSTS:-}
+
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: warexo
+      DB_USER: warexo
+      DB_PASSWORD: ${SERVICE_PASSWORD_64_DB}
+
+      MAILER_TRANSPORT: smtp
+      MAILER_HOST: mailpit
+      MAILER_USER: ""
+      MAILER_PASSWORD: ""
+
+      WAREXO_LOCALE: ${WAREXO_LOCALE:-de_DE}
+      WAREXO_SECRET: ${SERVICE_BASE64_64_APP}
+      WAREXO_COOKIE_LIFETIME: ${WAREXO_COOKIE_LIFETIME:-86400}
+      WAREXO_GC_MAX_LIFETIME: ${WAREXO_GC_MAX_LIFETIME:-1440}
+      WAREXO_COOKIE_SECURE: ${WAREXO_COOKIE_SECURE:-true}
+
+      WAREXO_SNAPSHOT_URL: ${WAREXO_SNAPSHOT_URL:-}
+      WAREXO_SNAPSHOT_TOKEN: ${WAREXO_SNAPSHOT_TOKEN:-}
+
+    expose:
+      - "80"
+
+    volumes:
+      - warexo_code:/var/www/html
+      - warexo_state:/var/lib/warexo
+      - vscode_server:/home/developer/.vscode-server
+      - codex_home:/home/developer/.codex
+
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+
+    environment:
+      MARIADB_ROOT_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
+      MARIADB_DATABASE: warexo
+      MARIADB_USER: warexo
+      MARIADB_PASSWORD: ${SERVICE_PASSWORD_64_DB}
+
+    command:
+      - mariadbd
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --innodb-file-per-table=1
+
+    volumes:
+      - warexo_db:/var/lib/mysql
+
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - mariadb-admin ping -h 127.0.0.1 -u warexo -p"$$MARIADB_PASSWORD" --silent
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+
+volumes:
+  warexo_code:
+  warexo_state:
+  warexo_db:
+  vscode_server:
+  codex_home:

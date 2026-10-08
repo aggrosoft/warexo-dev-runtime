@@ -98,17 +98,17 @@ On first start the runtime:
 2. clones Warexo into the persistent source volume
 3. checks out `WAREXO_GIT_REF`
 4. generates `app/config/parameters.yml`
-5. optionally restores a development database snapshot
-6. runs the committed Composer lock file
-7. warms the Symfony production cache
-8. starts Apache
+5. runs the committed Composer lock file
+6. warms the Symfony production cache
+7. starts Apache
+8. leaves the fresh database ready for `/install.php`
 
 A failed bootstrap does not stop the container. The instance remains reachable for inspection and the next restart resumes incomplete initialization.
 
-The successful initialization marker is:
+The successful runtime initialization marker is:
 
 ```text
-/var/lib/warexo/initialized
+/var/lib/warexo/runtime-initialized
 ```
 
 ## Database and application configuration
@@ -142,18 +142,26 @@ This fetches the remote, checks out the requested branch/tag/commit, runs Compos
 
 Normal container restarts do not reset or switch the working copy.
 
-## Database snapshot
+## Fresh database setup
 
-Optional variables:
+Development instances intentionally start with a fresh MariaDB database. No production database dump is imported.
 
-```env
-WAREXO_SNAPSHOT_URL=https://...
-WAREXO_SNAPSHOT_TOKEN=...
+The runtime prepares the application code and configuration, then leaves schema/data initialization to Warexo's own installer:
+
+```text
+/install.php
 ```
 
-When configured on a fresh instance, the runtime downloads a `.sql.zst` snapshot and restores it before application setup.
+This keeps the database schema tied to the checked-out Warexo revision instead of coupling a current Git branch to an unrelated historical live dump.
 
-The next implementation step is the production-to-development snapshot pipeline with sanitization and a deterministic `warexo-reset` command.
+A clean reset is therefore the disposable-resource workflow:
+
+1. delete the Coolify Compose resource
+2. delete its named volumes
+3. create a new resource from `compose.coolify.example.yaml`
+4. run the Warexo installer again
+
+Normal container restarts keep the existing working tree and development database.
 
 ## Safety
 

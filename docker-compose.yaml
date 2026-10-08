@@ -3,7 +3,10 @@ services:
     build:
       context: .
     restart: unless-stopped
+    expose:
+      - "80"
     environment:
+      AGGRO_SSH_ENABLED: "true"
       WAREXO_GIT_URL: "${WAREXO_GIT_URL}"
       WAREXO_GIT_REF: "${WAREXO_GIT_REF:-master}"
       WAREXO_GIT_PRIVATE_KEY: "${WAREXO_GIT_PRIVATE_KEY:-}"

@@ -39,8 +39,8 @@ services:
     volumes:
       - warexo_code:/var/www/html
       - warexo_state:/var/lib/warexo
-      - vscode_server:/home/developer/.vscode-server
-      - codex_home:/home/developer/.codex
+      - vscode_server:/root/.vscode-server
+      - codex_home:/root/.codex
 
     depends_on:
       db:

@@ -56,7 +56,8 @@ RUN php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php')
 
 RUN mkdir -p /opt/warexo/bin /var/www/html \
     && useradd -m -s /bin/bash developer \
-    && usermod -aG www-data developer
+    && usermod -aG www-data developer \
+    && git config --system --add safe.directory /var/www/html
 
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 COPY docker/php.ini /usr/local/etc/php/conf.d/warexo.ini

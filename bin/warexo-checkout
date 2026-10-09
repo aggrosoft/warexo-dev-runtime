@@ -12,9 +12,12 @@ ref="$1"
 git fetch origin --prune
 git checkout "$ref" || git checkout --detach "$ref"
 
-composer install --prefer-dist --no-interaction --no-progress
+# The vendor package is built separately; never run Composer in the Git tree.
+/opt/warexo/bin/install-vendors
 
-rm -rf app/cache/prod/*
-php app/console cache:warmup --env=prod || true
+# Regenerate runtime-only cache, but keep any tracked cache placeholders.
+if [ -f app/console ]; then
+    sudo -u developer -H php app/console cache:warmup --env=prod || true
+fi
 
 echo "Warexo is now on: $(git rev-parse --short HEAD)"

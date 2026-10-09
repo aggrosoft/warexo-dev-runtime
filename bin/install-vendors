@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build Composer dependencies away from the Git checkout, as Warexo's
+# vendor ZIP release process does. Tracked vendor files may contain patches
+# and must never be overwritten by Composer.
+cd /var/www/html
+workspace="$(mktemp -d /tmp/warexo-vendors.XXXXXXXX)"
+trap 'rm -rf "$workspace"' EXIT
+
+cp composer.json composer.lock "$workspace/"
+chown -R developer:developer "$workspace"
+
+# The legacy lock file requires Composer 1. Don't invoke project scripts:
+# they regenerate tracked Symfony bootstrap files and public assets.
+sudo -u developer -H bash -c 'cd "$1" && composer install --prefer-source --no-scripts --no-interaction --no-progress' _ "$workspace"
+
+# Git tracks a small subset of vendor/. Keep those exact files untouched,
+# while supplying all other packages and Composer's generated autoloader.
+excludes="$workspace/tracked-vendor-excludes"
+git ls-files -z -- vendor/ | while IFS= read -r -d '' path; do
+    printf '/%s\n' "${path#vendor/}"
+done > "$excludes"
+
+mkdir -p vendor
+rsync -a --exclude-from="$excludes" "$workspace/vendor/" /var/www/html/vendor/
+chown -R developer:www-data /var/www/html/vendor
+
+# An extra guard: refuse to consider the dependency installation successful
+# if it changed any versioned file. Existing changes are not discarded.
+if ! git diff --quiet -- vendor/; then
+    echo "[warexo-dev] WARNING: vendor/ contains tracked changes; existing changes were preserved." >&2
+fi
+
+echo "[warexo-dev] Composer dependencies prepared without replacing tracked vendor files."

@@ -3,25 +3,18 @@ set -euo pipefail
 
 cd /var/www/html
 
-sudo -u developer -H composer install --prefer-dist --no-interaction --no-progress
+/opt/warexo/bin/install-vendors
 
 mkdir -p app/cache app/logs
 chown -R developer:www-data app/cache app/logs
 chmod -R ug+rwX app/cache app/logs
 
-# Keep newly-created cache/log files writable by both developer and Apache.
-find app/cache app/logs -type d -exec chmod g+s {} +
-
-rm -rf app/cache/prod/*
+# Do not delete the tracked app/cache/.gitignore.
 mkdir -p app/cache/prod/http_cache
-chown -R developer:www-data app/cache app/logs
-chmod -R ug+rwX app/cache app/logs
-
 if [ -f app/console ]; then
     sudo -u developer -H php app/console cache:warmup --env=prod || true
 fi
 
-# Warmup may recreate directories; normalize once more for Apache.
 chown -R developer:www-data app/cache app/logs
 chmod -R ug+rwX app/cache app/logs
 find app/cache app/logs -type d -exec chmod g+s {} +

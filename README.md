@@ -130,6 +130,24 @@ app/config/parameters.yml
 
 Mail is redirected to the local `mailpit` service.
 
+## Composer and tracked vendor patches
+
+The historical Warexo release process builds the application archive and Composer
+vendor archive separately. The dev runtime follows that separation:
+
+- Composer 1 runs in a temporary staging directory using the checked-out
+  `composer.json` and `composer.lock`.
+- It uses `--prefer-source --no-scripts` and never runs Composer in the Git tree.
+- The generated `vendor/` is copied into the application, excluding every
+  file tracked by Git under `vendor/`. This preserves historical Warexo patches.
+- The Symfony cache warmup is run separately. The tracked
+  `app/cache/.gitignore` file is not deleted.
+
+This is a first-bootstrap change, **not a cleanup of existing installations**.
+Existing tracked modifications from earlier in-place Composer installs remain
+until reviewed and deliberately reverted. The application source and database
+volumes are retained across normal redeploys.
+
 ## Git checkout
 
 To switch the running working copy:

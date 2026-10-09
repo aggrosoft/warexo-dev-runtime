@@ -1,6 +1,6 @@
 FROM php:7.4-apache-bullseye
 
-ENV DEBIAN_FRONTEND=noninteractive\n\n# Disposable development instance: PHP and Git share the developer UID.\nENV APACHE_RUN_USER=developer APACHE_RUN_GROUP=developer
+ENV DEBIAN_FRONTEND=noninteractive\n\n# Disposable development instance: PHP and Git share the developer UID.\nRUN sed -i 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=developer/; s/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=developer/' /etc/apache2/envvars
 
 LABEL org.opencontainers.image.title="Warexo Dev Runtime" \
       org.opencontainers.image.description="Disposable remote development runtime for Warexo" \

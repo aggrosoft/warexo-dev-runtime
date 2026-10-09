@@ -90,6 +90,15 @@ The working tree is:
 
 VS Code server and Codex state have their own persistent volumes.
 
+## Development filesystem permissions
+
+This disposable runtime deliberately uses one application account: `developer`.
+Apache/PHP, Git checkout, Composer and Symfony console commands all operate
+as that user. The central SSH bridge may still enter as `root`, which can
+access the same workspace. Startup normalizes ownership of `/var/www/html`
+(including `web/`) so application-generated CSS and other files are writable.
+This is a development-only convenience and is not a production security model.
+
 ## First bootstrap
 
 On first start the runtime:

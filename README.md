@@ -96,7 +96,7 @@ This disposable runtime deliberately uses one application account: `developer`.
 Apache/PHP, Git checkout, Composer and Symfony console commands all operate
 as that user. The central SSH bridge may still enter as `root`, which can
 access the same workspace. Startup normalizes ownership of `/var/www/html`
-(including `web/`) so application-generated CSS and other files are writable.
+(including `web/`) before and after bootstrapping so application-generated CSS, JMS metadata caches, and other files remain writable. Composer and cache warmup use `developer:developer` consistently; no separate `www-data` file owner/group is needed.
 This is a development-only convenience and is not a production security model.
 
 ## First bootstrap

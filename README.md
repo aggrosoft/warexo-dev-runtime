@@ -137,6 +137,8 @@ The runtime writes these values to the legacy:
 app/config/parameters.yml
 ```
 
+Set `WAREXO_LICENSE` as a Coolify environment variable to populate the `license` field in `app/config/parameters.yml`. The setting is optional and defaults to an empty value. The parameters file is regenerated on every container start, so changing the variable takes effect after recreating or restarting the Warexo service. The license value is YAML-quoted to preserve special characters.
+
 Mail is redirected to the local `mailpit` service.
 
 ## Composer and tracked vendor patches

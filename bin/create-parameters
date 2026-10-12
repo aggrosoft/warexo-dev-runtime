@@ -53,5 +53,5 @@ parameters:
     cookiesecure: ${WAREXO_COOKIE_SECURE:-true}
 EOF
 
-chown developer:www-data "$PARAMETERS"
+chown developer:developer "$PARAMETERS"
 chmod 0640 "$PARAMETERS"

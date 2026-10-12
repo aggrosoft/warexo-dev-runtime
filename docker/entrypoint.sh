@@ -14,6 +14,9 @@ bootstrap() {
         /opt/warexo/bin/clone-warexo
     fi
 
+    # Fix existing volumes before touching config or running bootstrap commands.
+    /opt/warexo/bin/fix-runtime-permissions
+
     # Environment-specific config is regenerated on every start.
     /opt/warexo/bin/create-parameters
 

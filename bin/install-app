@@ -7,15 +7,13 @@ cd /var/www/html
 
 # Symfony needs these directories writable before cache warmup, not just after.
 mkdir -p app/cache/prod/http_cache app/logs
-chown -R developer:www-data app/cache app/logs
-chmod -R ug+rwX app/cache app/logs
-find app/cache app/logs -type d -exec chmod g+s {} +
+chown -R developer:developer app/cache app/logs
+chmod -R u+rwX app/cache app/logs
 
 if [ -f app/console ]; then
     sudo -u developer -H php app/console cache:warmup --env=prod
 fi
 
-# Apache (www-data) also needs ongoing access to the warmed cache.
-chown -R developer:www-data app/cache app/logs
-chmod -R ug+rwX app/cache app/logs
-find app/cache app/logs -type d -exec chmod g+s {} +
+# Apache/PHP runs as developer as well. Do not create mixed-owner cache files.
+chown -R developer:developer app/cache app/logs
+chmod -R u+rwX app/cache app/logs

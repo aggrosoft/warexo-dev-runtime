@@ -46,6 +46,7 @@ parameters:
     mailer_password: $(yaml_quote "${MAILER_PASSWORD:-}")
     locale: $(yaml_quote "${WAREXO_LOCALE:-de_DE}")
     secret: $(yaml_quote "$WAREXO_SECRET")
+    license: $(yaml_quote "${WAREXO_LICENSE:-}")
     database_path: null
     cookielifetime: ${WAREXO_COOKIE_LIFETIME:-86400}
     gcmaxlifetime: ${WAREXO_GC_MAX_LIFETIME:-1440}

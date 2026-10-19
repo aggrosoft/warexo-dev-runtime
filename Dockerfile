@@ -56,7 +56,12 @@ RUN docker-php-ext-install -j"$(nproc)" \
 
 RUN a2enmod rewrite headers
 
-# Warexo AppService::getPhpCommand() passes php_ini_loaded_file() to CLI via -c.\n# Official PHP images load conf.d snippets without a main php.ini by default;\n# provide a real php.ini so manually triggered webshop import subprocesses start.\nRUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"\n\nRUN php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');" \
+# Warexo AppService::getPhpCommand() passes php_ini_loaded_file() to CLI via -c.
+# Official PHP images load conf.d snippets without a main php.ini by default;
+# provide a real php.ini so manually triggered webshop import subprocesses start.
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+
+RUN php -r "copy('https://getcomposer.org/installer', '/tmp/composer-setup.php');" \
     && php /tmp/composer-setup.php --1 --install-dir=/usr/local/bin --filename=composer \
     && rm /tmp/composer-setup.php
 

@@ -61,8 +61,8 @@ with db.cursor() as cur:
         pass
     # Executes the restored trigger; an unresolved source-only definer would fail.
     cur.execute('UPDATE clone_fixture SET value=value WHERE id=1')
-    cur.execute('SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()')
-    assert cur.fetchone()[0] == 0, 'Source events must remain inert manifest evidence, not executable clone events.'
+    # With event_scheduler=DISABLED MariaDB also refuses information_schema.EVENTS
+    # reads. The host-side test inspects mysql.event with the test root account.
 db.rollback()
 db.close()
 print('Imported application, vendor, credentials, login, routine/trigger, inert event evidence and unchanged SQL string data verified.')

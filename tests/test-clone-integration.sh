@@ -63,6 +63,9 @@ source_files > "$WAREXO_TEST_TMP/files-before"
 source_database > "$WAREXO_TEST_TMP/database-before"
 "${target_compose[@]}" up -d --wait --wait-timeout 240
 "${target_compose[@]}" exec -T warexo python3 - < tests/integration/assert-clone.py
+[[ $("${target_compose[@]}" exec -T -e MYSQL_PWD="$SERVICE_PASSWORD_64_DBROOT" db \
+    mariadb --no-defaults --user=root --batch --skip-column-names \
+    --execute="SELECT COUNT(*) FROM mysql.event WHERE db='warexo'") == 0 ]]
 gateway_address=$("${target_compose[@]}" port gateway 80)
 [[ $(curl --fail --silent --retry 10 --retry-connrefused --retry-delay 1 --max-time 10 "http://$gateway_address/") == 'warexo clone fixture' ]]
 [[ $(curl --silent -o /dev/null -w '%{http_code}' "http://$gateway_address/install.php") == 404 ]]

@@ -3,6 +3,19 @@ set -u
 
 mkdir -p /var/lib/warexo
 
+# Source credentials exist only in the one-shot importer. A restored application
+# must never run the fresh-install Composer or Git bootstrap.
+case "${WAREXO_BOOTSTRAP_MODE:-fresh}" in
+    clone)
+        exec /opt/warexo/bin/start-clone "$@"
+        ;;
+    fresh) ;;
+    *)
+        echo "[warexo-dev] Unknown WAREXO_BOOTSTRAP_MODE; refusing application startup." >&2
+        exit 1
+        ;;
+esac
+
 # This SSH configuration is only for cloning/pushing the Warexo source repository.
 # Developer access is handled centrally by coolify-ssh-bridge through docker exec.
 if ! /opt/warexo/bin/setup-git-ssh; then
@@ -11,23 +24,23 @@ fi
 
 bootstrap() {
     if [ ! -d /var/www/html/.git ]; then
-        /opt/warexo/bin/clone-warexo
+        /opt/warexo/bin/clone-warexo || return $?
     fi
 
     # Fix existing volumes before touching config or running bootstrap commands.
-    /opt/warexo/bin/fix-runtime-permissions
+    /opt/warexo/bin/fix-runtime-permissions || return $?
 
     # Environment-specific config is regenerated on every start.
-    /opt/warexo/bin/create-parameters
+    /opt/warexo/bin/create-parameters || return $?
 
     # Composer/application preparation only needs to complete once per disposable
     # workspace. Database schema/data are intentionally NOT cloned here.
     if [ ! -f /var/lib/warexo/runtime-initialized ]; then
-        /opt/warexo/bin/install-app
-        touch /var/lib/warexo/runtime-initialized
+        /opt/warexo/bin/install-app || return $?
+        touch /var/lib/warexo/runtime-initialized || return $?
     fi
 
-    /opt/warexo/bin/fix-runtime-permissions
+    /opt/warexo/bin/fix-runtime-permissions || return $?
 }
 
 echo "[warexo-dev] Starting Warexo runtime bootstrap..."
@@ -46,3 +59,4 @@ else
 fi
 
 exec "$@"
+

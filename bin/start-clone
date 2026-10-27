@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state=/var/lib/warexo
+rm -f "$state/clone-app-ready" "$state/health/ready.txt"
+
+fail() {
+    echo "[warexo-clone] $1 Application is stopped; inspect importer/application logs." >&2
+    touch "$state/clone-app-failed"
+    # Keep the disposable container inspectable through the existing SSH bridge.
+    exec sleep infinity
+}
+
+if [ ! -f "$state/clone-ready" ]; then
+    fail "No completed, sanitized clone is available."
+fi
+# Private intake files stay mode 0600; Apache needs traversal to the dedicated
+# public health subdirectory, never access to the import log or source secrets.
+chmod 0755 "$state"
+if [ ! -f /var/www/html/vendor/autoload.php ] || [ ! -f /var/www/html/app/console ]; then
+    fail "The imported Warexo application or deployed vendor tree is incomplete."
+fi
+python3 /opt/warexo/clone/import_source.py --verify-ready || fail "The local clone or target database is incomplete."
+
+/opt/warexo/bin/fix-runtime-permissions || fail "Cannot prepare workspace permissions."
+/opt/warexo/bin/create-parameters || fail "Cannot create local application configuration."
+
+# In clone mode the copied dependency tree is authoritative. Do not run Composer
+# and do not invoke the installer or any schema-update command.
+if ! sudo -u developer -H php /var/www/html/app/console cache:warmup --env=prod; then
+    fail "Symfony cache warmup failed."
+fi
+
+mkdir -p "$state/health"
+printf 'ready\n' > "$state/health/ready.txt"
+chmod 0755 "$state/health"
+chmod 0644 "$state/health/ready.txt"
+rm -f "$state/clone-app-failed"
+touch "$state/clone-app-ready"
+echo "[warexo-clone] Imported application is ready. No source contact or reimport on restart."
+exec "$@"

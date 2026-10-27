@@ -8,7 +8,14 @@ This repository publishes the runtime image:
 ghcr.io/aggrosoft/warexo-dev-runtime:main
 ```
 
-Do **not** deploy this repository as a normal GitHub application in Coolify. Create a **Docker Compose** resource and use `compose.coolify.example.yaml` as the template.
+Do **not** deploy this repository as a normal GitHub application in Coolify. Create a **Docker Compose** resource and choose a template:
+
+| Goal | Template | Setup |
+| --- | --- | --- |
+| Work on a copy of an existing installation, including its database and deployed vendor patches | `compose.clone.coolify.example.yaml` | [SSH clone setup](CLONE.md) |
+| Install a blank Warexo instance from Git | `compose.coolify.example.yaml` | Fresh-install instructions below |
+
+The clone mode accepts SSH access and an installation path. It reads the source database configuration, copies the deployed files, imports a transactional database dump, neutralizes known credentials, and starts Warexo only after these steps succeed. It does not run the live application, Composer, or the installer on the source.
 
 ## Runtime
 
@@ -20,15 +27,15 @@ The image intentionally keeps the legacy application stack stable:
 - MariaDB 10.11 in the Coolify template
 - Mailpit for development mail
 - no Warexo cron jobs by default
-- Git working copy persisted in a named volume
+- application files persisted in a named volume
 
-The Warexo source itself is not part of this repository. It is cloned from the configured self-hosted Git remote into:
+The Warexo source itself is not part of this repository. Fresh mode checks it out from Git; clone mode copies it from the existing installation into:
 
 ```text
 /var/www/html
 ```
 
-## Create a new instance in Coolify
+## Create a fresh instance in Coolify
 
 1. Create a **Docker Compose** resource.
 2. Paste/use `compose.coolify.example.yaml`.
@@ -44,7 +51,7 @@ SERVICE_FQDN_WAREXO
 
 Coolify generates the internal database passwords and application secret through its `SERVICE_PASSWORD_*` / `SERVICE_BASE64_*` variables.
 
-## Required environment
+## Required environment for a fresh instance
 
 Only source-repository access is required for a blank development instance:
 
@@ -99,7 +106,7 @@ access the same workspace. Startup normalizes ownership of `/var/www/html`
 (including `web/`) before and after bootstrapping so application-generated CSS, JMS metadata caches, and other files remain writable. Composer and cache warmup use `developer:developer` consistently; no separate `www-data` file owner/group is needed.
 This is a development-only convenience and is not a production security model.
 
-## First bootstrap
+## First bootstrap of a fresh instance
 
 On first start the runtime:
 
@@ -141,7 +148,7 @@ Set `WAREXO_LICENSE` as a Coolify environment variable to populate the `license`
 
 Mail is redirected to the local `mailpit` service.
 
-## Composer and tracked vendor patches
+## Composer and tracked vendor patches in fresh mode
 
 The historical Warexo release process builds the application archive and Composer
 vendor archive separately. The dev runtime follows that separation:
@@ -159,7 +166,7 @@ Existing tracked modifications from earlier in-place Composer installs remain
 until reviewed and deliberately reverted. The application source and database
 volumes are retained across normal redeploys.
 
-## Git checkout
+## Git checkout in fresh mode
 
 To switch the running working copy:
 
@@ -173,7 +180,7 @@ Normal container restarts do not reset or switch the working copy.
 
 ## Fresh database setup
 
-Development instances intentionally start with a fresh MariaDB database. No production database dump is imported.
+Instances created from `compose.coolify.example.yaml` intentionally start with a fresh MariaDB database. To import an existing installation, use the separate [clone template](CLONE.md).
 
 The runtime prepares the application code and configuration, then leaves schema/data initialization to Warexo's own installer:
 
@@ -196,4 +203,5 @@ Normal container restarts keep the existing working tree and development databas
 
 Production Warexo cron jobs are intentionally absent. The existing production schedule contains imports, mail delivery, mailbox polling, downloads, subscriptions and webshop exports. They must not start automatically in a cloned development database.
 
-External integrations will be classified and neutralized as part of the snapshot/sanitization work before cron profiles are introduced.
+Clone mode additionally clears known integration credentials, resets development access, disables database events, and isolates the application on an internal Docker network behind a fixed reverse proxy. It preserves business data and is **not full anonymization**. See [clone boundaries and recovery](CLONE.md#boundaries-and-recovery).
+

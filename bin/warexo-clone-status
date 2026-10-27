@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+python3 - "$@" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+root = Path('/var/lib/warexo')
+if sys.argv[1:] not in ([], ['--details']):
+    sys.exit('Usage: warexo-clone-status [--details]')
+for marker in ('clone-started', 'clone-ready', 'clone-app-ready', 'clone-app-failed'):
+    print(f'{marker}: {"yes" if (root / marker).is_file() else "no"}')
+summary = root / 'clone-sanitization.json'
+if summary.is_file():
+    print('Development login: ' + json.loads(summary.read_text())['login_username'])
+    print('Password: Coolify variable SERVICE_PASSWORD_64_CLONEADMIN')
+if '--details' not in sys.argv:
+    sys.exit(0)
+for name in ('clone-manifest.json', 'clone-sanitization.json'):
+    path = root / name
+    if path.is_file():
+        print(f'\n{name}:')
+        print(json.dumps(json.loads(path.read_text()), indent=2, ensure_ascii=False))
+PY

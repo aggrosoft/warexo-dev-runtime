@@ -34,6 +34,9 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update \
         libxml2-dev \
         libzip-dev \
         openssh-client \
+        python3 \
+        python3-pymysql \
+        python3-yaml \
         rsync \
         sudo \
         unzip \
@@ -74,6 +77,7 @@ COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 COPY docker/php.ini /usr/local/etc/php/conf.d/warexo.ini
 COPY docker/entrypoint.sh /usr/local/bin/warexo-entrypoint
 COPY bin/ /opt/warexo/bin/
+COPY clone/ /opt/warexo/clone/
 
 RUN chmod +x /usr/local/bin/warexo-entrypoint /opt/warexo/bin/*
 
@@ -81,3 +85,4 @@ WORKDIR /var/www/html
 
 ENTRYPOINT ["/usr/local/bin/warexo-entrypoint"]
 CMD ["apache2-foreground"]
+

@@ -17,7 +17,8 @@ git checkout "$ref" || git checkout --detach "$ref"
 
 # Regenerate runtime-only cache, but keep any tracked cache placeholders.
 if [ -f app/console ]; then
-    sudo -u developer -H php app/console cache:warmup --env=prod || true
+    sudo -u developer -H php app/console cache:warmup --env=prod
 fi
 
 echo "Warexo is now on: $(git rev-parse --short HEAD)"
+

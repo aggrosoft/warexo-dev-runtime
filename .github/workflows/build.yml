@@ -23,12 +23,28 @@ jobs:
         run: |
           bash -n docker/entrypoint.sh
           for script in bin/*; do bash -n "$script"; done
+          bash -n tests/test-clone-integration.sh
+
+      - name: Run clone and bootstrap unit tests
+        run: |
+          python3 -m pip install 'PyYAML>=6,<7'
+          python3 -m unittest discover -s tests -v
+          python3 -m compileall -q clone
 
       - name: Validate Coolify Compose template
         run: |
           WAREXO_GIT_URL=ssh://dev@example.invalid/repo.git \
           WAREXO_GIT_PRIVATE_KEY=dummy \
           docker compose -f compose.coolify.example.yaml config >/dev/null
+
+      - name: Validate clone Compose template
+        env:
+          SOURCE_SSH_HOST: source.example.invalid
+          SOURCE_SSH_USER: example
+          SOURCE_SSH_PRIVATE_KEY: dummy-validation-only
+          SOURCE_SSH_KNOWN_HOSTS: dummy-validation-only
+          SOURCE_WAREXO_PATH: /srv/warexo
+        run: docker compose -f compose.clone.coolify.example.yaml config >/dev/null
 
   build:
     needs: validate
@@ -57,11 +73,31 @@ jobs:
             type=sha,prefix=sha-
             type=ref,event=tag
 
-      - name: Build and publish
+      - name: Build runtime for integration tests
         uses: docker/build-push-action@v6
         with:
           context: .
           platforms: linux/amd64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
+          load: true
+          tags: warexo-runtime:test
           labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Validate PHP helper
+        run: docker run --rm --entrypoint php warexo-runtime:test -l /opt/warexo/clone/source_database.php
+
+      - name: Verify SSH clone lifecycle and isolation
+        env:
+          WAREXO_RUNTIME_IMAGE: warexo-runtime:test
+        run: bash tests/test-clone-integration.sh
+
+      - name: Publish verified image
+        if: github.event_name != 'pull_request'
+        env:
+          IMAGE_TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            docker tag warexo-runtime:test "$tag"
+            docker push "$tag"
+          done <<< "$IMAGE_TAGS"
+

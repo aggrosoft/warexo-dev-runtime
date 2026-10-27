@@ -2,13 +2,14 @@
 set -euo pipefail
 
 cd /var/www/html
-if [ ! -d .git ]; then
+if [ ! -d .git ] && [ ! -f composer.json ]; then
     exit 0
 fi
 
 # One filesystem owner for the entire disposable development workspace.
 # Apache/PHP and Composer run as developer; SSH bridge uses root.
-chown -R developer:developer /var/www/html
+chown -hR developer:developer /var/www/html
 mkdir -p app/cache/prod/http_cache app/logs web/css
 chown -R developer:developer app/cache app/logs web
 chmod -R u+rwX app/cache app/logs web
+

@@ -1,0 +1,12 @@
+services:
+  clone:
+    pull_policy: never
+  warexo:
+    pull_policy: never
+  gateway:
+    ports:
+      - "127.0.0.1::80"
+networks:
+  intake:
+    external: true
+    name: ${WAREXO_TEST_NETWORK:?}

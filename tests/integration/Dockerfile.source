@@ -1,0 +1,8 @@
+ARG WAREXO_RUNTIME_IMAGE=warexo-runtime:test
+FROM ${WAREXO_RUNTIME_IMAGE}
+RUN apt-get -o Acquire::Check-Valid-Until=false update \
+    && apt-get install -y --no-install-recommends openssh-server \
+    && rm -rf /var/lib/apt/lists/*
+COPY tests/integration/source-entrypoint.sh /usr/local/bin/source-fixture
+RUN chmod +x /usr/local/bin/source-fixture
+ENTRYPOINT ["/usr/local/bin/source-fixture"]

@@ -19,6 +19,14 @@ cleanup() {
         "${source_compose[@]}" logs --tail 80 || true
         "${target_compose[@]}" logs --tail 120 || true
         "${failed_compose[@]}" logs --tail 80 || true
+        # These volumes contain only synthetic fixture data. Keep production
+        # importer diagnostics protected; expose this test log before cleanup.
+        for fixture_project in "$test_project" "$test_project-failed"; do
+            if docker volume inspect "${fixture_project}_warexo_state" >/dev/null 2>&1; then
+                docker run --rm --entrypoint sh -v "${fixture_project}_warexo_state:/state:ro" "$WAREXO_RUNTIME_IMAGE" \
+                    -c 'if [ -f /state/clone-error.log ]; then cat /state/clone-error.log; fi' || true
+            fi
+        done
     fi
     "${failed_compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true
     "${target_compose[@]}" down -v --remove-orphans >/dev/null 2>&1 || true

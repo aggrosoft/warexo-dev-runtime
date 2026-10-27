@@ -41,7 +41,7 @@ The importer also accepts `SOURCE_SSH_PRIVATE_KEY_FILE` and `SOURCE_SSH_KNOWN_HO
 
 ## First start and login
 
-The importer checks the source, copies files with rsync, obtains a transactional dump over SSH, restores it into the empty target database, and then runs the neutralization step. Deployed vendor patches remain intact. It does not install dependencies or perform a schema migration.
+The importer checks the source, copies files with rsync, obtains a transactional dump over SSH, restores it into the empty target database, and then runs the neutralization step. Deployed vendor patches remain intact. It does not install dependencies or perform a schema migration. Tables, views, triggers, and routines are restored. Database event definitions are kept only as reference in the protected manifest; scheduled events are not installed in the target.
 
 The clone keeps the selected user's roles and client memberships, sets a new local password, unlocks the account, and disables the other existing user accounts. It clears recognized shop/mail/plugin credentials and recipient addresses and resets tokens. The password is the Coolify-generated **`SERVICE_PASSWORD_64_CLONEADMIN`**, not the source user's password. It is not printed in logs.
 
@@ -67,7 +67,7 @@ The database snapshot is transactional. The file copy and database dump are **no
 
 ## Isolation
 
-Only the one-shot importer receives the source SSH credentials and has an outbound network. The application, database, and Mailpit share an internal backend network. A separate nginx gateway exposes a fixed upstream to Warexo. Database events are disabled at server startup, Warexo cron jobs are absent, and the installer/debug/restore entrypoints are removed or blocked. Mail is configured to the local Mailpit service.
+Only the one-shot importer receives the source SSH credentials and has an outbound network. The application, database, and Mailpit share an internal backend network. A separate nginx gateway exposes a fixed upstream to Warexo. The database event scheduler is disabled at server startup, and event definitions are archived without restoring them (MariaDB also disallows event DDL when the scheduler is `DISABLED`). Warexo cron jobs are absent, and the installer/debug/restore entrypoints are removed or blocked. Mail is configured to the local Mailpit service.
 
 Keep that network topology when deploying in Coolify. Adding a routed network to `warexo` bypasses the outbound boundary. Git fetches, Composer downloads, and agents that need external APIs should run in a separate development/controller service; the imported application intentionally has no general internet access.
 
@@ -87,4 +87,4 @@ Protected diagnostic files are in `/var/lib/warexo`: `clone-error.log`, `clone-m
 
 ## Verification
 
-The workflow runs unit tests and builds the actual runtime image. Before publishing it, it runs `tests/test-clone-integration.sh` against a synthetic SSH source and MariaDB. That exercises file/database import, vendor preservation, login reset, source preservation, outbound isolation, failed-host-key startup, and a restart after removing the source. This synthetic fixture does not replace the first acceptance check against a representative existing Warexo installation.
+The workflow runs unit tests and builds the actual runtime image. Before publishing it, it runs `tests/test-clone-integration.sh` against a synthetic SSH source and MariaDB. That exercises file/database import, vendor preservation, login reset, routine/trigger restoration, event archiving, source preservation, outbound isolation, failed-host-key startup, and a restart after removing the source. This synthetic fixture does not replace the first acceptance check against a representative existing Warexo installation.

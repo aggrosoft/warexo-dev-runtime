@@ -16,6 +16,12 @@ assert (app / 'app/warmup-ran').is_file()
 assert not (app / 'web/install.php').exists()
 assert not (state / 'source-database.sql').exists()
 assert json.loads((state / 'clone-ready').read_text())['format'] == 1
+events = json.loads((state / 'clone-manifest.json').read_text())['source']['events']
+assert len(events) == 1 and events[0]['name'] == 'fixture_disabled_event'
+event_sql = ' '.join(events[0]['create_statement'].split())
+assert event_sql.startswith('CREATE DEFINER=`fixture_definer`@`localhost` EVENT `fixture_disabled_event`')
+assert 'ON SCHEDULE EVERY 1 DAY' in event_sql and 'DISABLE' in event_sql
+assert 'DO UPDATE clone_fixture SET value=value' in event_sql
 parameters = yaml.safe_load((app / 'app/config/parameters.yml').read_text())['parameters']
 assert parameters['database_host'] == 'db' and parameters['mailer_host'] == 'mailpit'
 assert 'source-fixture-password' not in (app / 'app/config/parameters.yml').read_text()
@@ -45,7 +51,6 @@ with db.cursor() as cur:
     for catalog, schema_column, name_column, name in (
         ('TRIGGERS', 'TRIGGER_SCHEMA', 'TRIGGER_NAME', 'fixture_update'),
         ('ROUTINES', 'ROUTINE_SCHEMA', 'ROUTINE_NAME', 'fixture_definer_probe'),
-        ('EVENTS', 'EVENT_SCHEMA', 'EVENT_NAME', 'fixture_disabled_event'),
     ):
         cur.execute('SELECT DEFINER FROM information_schema.' + catalog
                     + ' WHERE ' + schema_column + '=DATABASE() AND ' + name_column + '=%s', (name,))
@@ -56,8 +61,8 @@ with db.cursor() as cur:
         pass
     # Executes the restored trigger; an unresolved source-only definer would fail.
     cur.execute('UPDATE clone_fixture SET value=value WHERE id=1')
-    cur.execute("SELECT STATUS FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE() AND EVENT_NAME='fixture_disabled_event'")
-    assert cur.fetchone()[0] == 'DISABLED'
+    cur.execute('SELECT COUNT(*) FROM information_schema.EVENTS WHERE EVENT_SCHEMA=DATABASE()')
+    assert cur.fetchone()[0] == 0, 'Source events must remain inert manifest evidence, not executable clone events.'
 db.rollback()
 db.close()
-print('Imported application, vendor, credentials, login, routine/trigger/event and unchanged SQL string data verified.')
+print('Imported application, vendor, credentials, login, routine/trigger, inert event evidence and unchanged SQL string data verified.')

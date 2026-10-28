@@ -1,5 +1,18 @@
 # Optional addition to compose.clone.coolify.example.yaml; never use by itself.
 # Keep the SAME Compose project and existing reference volumes when enabling it.
+# Coolify v4 automatically injects the project's .env into EVERY service.
+# Explicit empty environment entries override that env_file for non-clone services.
+# Keep this list in sync with the SOURCE_* inputs of the clone service.
+x-source-credentials-redacted: &source_credentials_redacted
+  SOURCE_SSH_HOST: ""
+  SOURCE_SSH_PORT: ""
+  SOURCE_SSH_USER: ""
+  SOURCE_SSH_PRIVATE_KEY: ""
+  SOURCE_SSH_KNOWN_HOSTS: ""
+  SOURCE_WAREXO_PATH: ""
+  SOURCE_PHP_BIN: ""
+  SOURCE_RSYNC_BWLIMIT_KB: ""
+
 services:
   clone:
     # Compatibility with Coolify's validator; no changed importer behavior.
@@ -9,6 +22,7 @@ services:
     image: ${WAREXO_PORTING_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main-porting}
     init: true
     environment:
+      <<: *source_credentials_redacted
       WAREXO_PORTING_ENABLED: "1"
       PORTING_DB_HOST: db
       PORTING_DB_PORT: 3306
@@ -30,6 +44,7 @@ services:
     entrypoint: ["python3", "/opt/warexo/porting/workspace.py"]
     command: null
     environment:
+      <<: *source_credentials_redacted
       DB_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
       REFERENCE_DB_NAME: warexo
       PORTING_DB_HOST: db
@@ -57,6 +72,8 @@ services:
 
   # The reference keeps its original URL and PHP 7.4 endpoint.
   gateway:
+    environment:
+      <<: *source_credentials_redacted
     command:
       - |
         cat > /etc/nginx/conf.d/default.conf <<'NGINX'
@@ -82,12 +99,21 @@ services:
         NGINX
         exec nginx -g 'daemon off;'
 
+  db:
+    environment:
+      <<: *source_credentials_redacted
+
+  mailpit:
+    environment:
+      <<: *source_credentials_redacted
+
   # A second ingress, not a second application container. Both PHP runtimes
   # execute inside the same warexo service reached by the existing SSH bridge.
   porting-gateway:
     image: nginx:1.28-alpine
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
       SERVICE_URL_PORTING_GATEWAY_80: /
       SERVICE_FQDN_PORTING_GATEWAY: null
     entrypoint: ["/bin/sh", "-ec"]
@@ -134,6 +160,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
       PORTING_ALLOWED_HOSTS: ${PORTING_ALLOWED_HOSTS:-github.com api.github.com codeload.github.com raw.githubusercontent.com objects.githubusercontent.com release-assets.githubusercontent.com packagist.org repo.packagist.org getcomposer.org}
     networks: [backend, porting_egress]
     cap_drop: [ALL]

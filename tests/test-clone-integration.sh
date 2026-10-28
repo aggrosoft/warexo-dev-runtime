@@ -15,7 +15,7 @@ failed_compose=(docker compose -p "$test_project-failed" -f compose.clone.coolif
 if [[ ${WAREXO_TEST_PORTING:-0} == 1 ]]; then
     target_compose+=( -f compose.porting.override.yaml -f tests/integration/porting-override.yaml )
     export SERVICE_PASSWORD_64_PORTDB=porting-app-fixture-password
-    export SERVICE_BASE64_64_PORTAPP=separate-porting-fixture-secret
+    export SERVICE_BASE64_64_PORTAPP=separate-porting-fixture-application-secret
 fi
 cleanup() {
     local status=$?

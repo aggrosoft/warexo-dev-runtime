@@ -18,13 +18,17 @@ verify_porting_initial() {
     [[ $(curl --fail --silent --max-time 10 "http://$porting_address/__warexo_porting_health") == php84-ready ]]
     [[ $(curl --fail --silent --max-time 10 "http://$porting_address/") == 'warexo clone fixture' ]]
     [[ $(curl --silent -o /dev/null -w '%{http_code}' "http://$porting_address/install.php") == 404 ]]
+    result=$(curl --fail --silent --max-time 10 "http://$gateway_address/runtime-probe.php")
+    python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 70400 <= p["version"] < 70500; assert p["database"] == "warexo"' "$result"
+    result=$(curl --fail --silent --max-time 10 "http://$porting_address/runtime-probe.php")
+    python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 80400 <= p["version"] < 80500; assert p["database"] == "warexo_port"' "$result"
     result=$(curl --fail --silent --max-time 10 "http://$porting_address/porting-check.php")
     python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 80400 <= p["version"] < 80500; assert p["child"].startswith("8.4."); assert p["session"].startswith("/workspace/"); assert p["database"] == "warexo_port"; assert p["has_proxy"] is False' "$result"
 
     # The dependency proxy must actually work, not merely reject every request.
     "${target_compose[@]}" exec -T warexo warexo-net curl --fail --silent --show-error --max-time 45 \
         https://repo.packagist.org/packages.json >/dev/null
-    "${target_compose[@]}" exec -T warexo warexo-net git ls-remote https://github.com/php/php-src.git HEAD >/dev/null
+    "${target_compose[@]}" exec -T warexo timeout 60 warexo-net git ls-remote https://github.com/php/php-src.git HEAD >/dev/null
     for denied_url in https://example.com/ https://169.254.169.254/ https://private.fixture.invalid/; do
         result=$("${target_compose[@]}" exec -T warexo warexo-net curl --noproxy '' --silent \
             --max-time 10 --output /dev/null --write-out '%{http_connect}' "$denied_url" || true)

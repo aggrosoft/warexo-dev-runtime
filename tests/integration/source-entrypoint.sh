@@ -16,6 +16,10 @@ printf '%s\n' 'deployed vendor patch must survive' > "$fixture_root/vendor/custo
 printf '%s\n' 'synthetic uploaded document' > "$fixture_root/web/uploads/customer.txt"
 printf '%s\n' '<?php echo "installer must not survive";' > "$fixture_root/web/install.php"
 printf '%s\n' '<?php echo "warexo clone fixture";' > "$fixture_root/web/app.php"
+cat > "$fixture_root/web/runtime-probe.php" <<'PHP'
+<?php
+echo json_encode(['version' => PHP_VERSION_ID, 'database' => getenv('DB_NAME')]);
+PHP
 cat > "$fixture_root/web/.htaccess" <<'HTACCESS'
 RewriteEngine On
 RewriteCond %{REQUEST_FILENAME} !-f

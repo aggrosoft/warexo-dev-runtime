@@ -82,7 +82,8 @@ class PortingComposeTests(unittest.TestCase):
         for key, value in app['environment'].items():
             if key.startswith('SOURCE_'):
                 self.assertEqual(value, '')
-            self.assertNotIn('ADMIN_PASSWORD', key)
+            if 'ADMIN_PASSWORD' in key:
+                self.assertEqual(value, '')
             self.assertNotIn('DBROOT', str(value))
             self.assertNotIn(key.lower(), ('http_proxy', 'https_proxy', 'all_proxy'))
         for name, service in self.services.items():

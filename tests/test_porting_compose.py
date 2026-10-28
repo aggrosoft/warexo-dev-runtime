@@ -41,8 +41,12 @@ class PortingComposeTests(unittest.TestCase):
         self.assertNotIn('porting', (ROOT / 'Dockerfile').read_text().lower())
 
     def test_reference_database_and_volumes_are_preserved(self):
-        self.assertEqual(self.services['db'], self.base['services']['db'])
-        self.assertEqual(self.services['mailpit'], self.base['services']['mailpit'])
+        for service_name in ('db', 'mailpit'):
+            old = self.base['services'][service_name]
+            new = copy.deepcopy(self.services[service_name])
+            for key in self.source_keys():
+                new['environment'].pop(key)
+            self.assertEqual(new, old)
         for name, value in self.base['volumes'].items():
             self.assertEqual(self.full['volumes'][name], value)
         old = self.base['services']['warexo']
@@ -53,13 +57,31 @@ class PortingComposeTests(unittest.TestCase):
         self.assertEqual(new['healthcheck'], old['healthcheck'])
         self.assertEqual(self.services['clone']['environment'], self.base['services']['clone']['environment'])
 
+    def source_keys(self):
+        return {key for key in self.base['services']['clone']['environment'] if key.startswith('SOURCE_')}
+
+    def test_coolify_v4_env_file_injection_cannot_reach_non_clone_source_credentials(self):
+        # Coolify v4 adds the project-wide .env as env_file to every service.
+        # Compose environment entries, including explicit '', override env_file.
+        source_keys = self.source_keys()
+        self.assertTrue(source_keys)
+        self.assertEqual(set(self.full['x-source-credentials-redacted']), source_keys)
+        self.assertEqual(set(self.extra['x-source-credentials-redacted']), source_keys)
+        for name, service in self.services.items():
+            if name == 'clone':
+                continue
+            self.assertTrue(source_keys.issubset(service['environment']), name)
+            for key in source_keys:
+                self.assertEqual(service['environment'][key], '', name + '.' + key)
+
     def test_application_has_one_internal_network_and_no_admin_credentials(self):
         app = self.services['warexo']
         self.assertEqual(app['networks'], ['backend'])
         self.assertTrue(self.full['networks']['backend']['internal'])
         self.assertEqual(app['environment']['WAREXO_PORTING_ENABLED'], '1')
         for key, value in app['environment'].items():
-            self.assertFalse(key.startswith('SOURCE_'))
+            if key.startswith('SOURCE_'):
+                self.assertEqual(value, '')
             self.assertNotIn('ADMIN_PASSWORD', key)
             self.assertNotIn('DBROOT', str(value))
             self.assertNotIn(key.lower(), ('http_proxy', 'https_proxy', 'all_proxy'))
@@ -81,7 +103,8 @@ class PortingComposeTests(unittest.TestCase):
         self.assertIn('warexo_porting_workspace:/workspace', init['volumes'])
         self.assertEqual(init['depends_on']['clone']['condition'], 'service_completed_successfully')
         self.assertEqual(self.services['warexo']['depends_on']['porting-init']['condition'], 'service_completed_successfully')
-        self.assertFalse(any(key.startswith('SOURCE_') for key in init['environment']))
+        self.assertFalse(any(key.startswith('SOURCE_') and value
+                             for key, value in init['environment'].items()))
 
     def test_target_database_credentials_are_consistent_and_distinct(self):
         app = self.services['warexo']['environment']
@@ -109,7 +132,7 @@ class PortingComposeTests(unittest.TestCase):
         self.assertEqual(set(proxy['networks']), {'backend', 'porting_egress'})
         self.assertFalse(proxy.get('volumes'))
         self.assertFalse(proxy.get('ports'))
-        self.assertEqual(set(proxy['environment']), {'PORTING_ALLOWED_HOSTS'})
+        self.assertEqual(set(proxy['environment']) - self.source_keys(), {'PORTING_ALLOWED_HOSTS'})
         hosts = proxy['environment']['PORTING_ALLOWED_HOSTS']
         self.assertNotIn('*', hosts)
         self.assertNotIn('openai', hosts)

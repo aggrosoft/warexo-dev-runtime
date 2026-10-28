@@ -6,7 +6,9 @@ services:
     pull_policy: always
     restart: "no"
     entrypoint: ["python3", "/opt/warexo/clone/import_source.py"]
-    command: []
+    # Coolify's Compose validator rejects an empty list here. The explicit
+    # entrypoint already suppresses the image's default CMD.
+    command: null
     environment:
       SOURCE_SSH_HOST: ${SOURCE_SSH_HOST:?Set source SSH hostname}
       SOURCE_SSH_PORT: ${SOURCE_SSH_PORT:-22}

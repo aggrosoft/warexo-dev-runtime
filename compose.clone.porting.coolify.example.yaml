@@ -1,0 +1,275 @@
+# Optional dual-PHP clone template. Standard clone mode uses the original template.
+# Equivalent to compose.clone.coolify.example.yaml + compose.porting.override.yaml.
+# Existing clone: keep the SAME Coolify resource/project and all existing volume mappings.
+# See PORTING.md before enabling; never replace reference volumes with new empty ones.
+services:
+  clone:
+    image: ${WAREXO_RUNTIME_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main}
+    pull_policy: always
+    restart: 'no'
+    entrypoint:
+    - python3
+    - /opt/warexo/clone/import_source.py
+    command: null
+    environment:
+      SOURCE_SSH_HOST: ${SOURCE_SSH_HOST:?Set source SSH hostname}
+      SOURCE_SSH_PORT: ${SOURCE_SSH_PORT:-22}
+      SOURCE_SSH_USER: ${SOURCE_SSH_USER:?Set source SSH username}
+      SOURCE_SSH_PRIVATE_KEY: ${SOURCE_SSH_PRIVATE_KEY:?Set source SSH private key}
+      SOURCE_SSH_KNOWN_HOSTS: ${SOURCE_SSH_KNOWN_HOSTS:?Set verified source SSH known_hosts entry}
+      SOURCE_WAREXO_PATH: ${SOURCE_WAREXO_PATH:?Set absolute path to the existing Warexo installation}
+      SOURCE_PHP_BIN: ${SOURCE_PHP_BIN:-php}
+      SOURCE_RSYNC_BWLIMIT_KB: ${SOURCE_RSYNC_BWLIMIT_KB:-0}
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: warexo
+      DB_USER: root
+      DB_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
+      CLONE_ADMIN_USERNAME: ${CLONE_ADMIN_USERNAME:-}
+      CLONE_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_CLONEADMIN}
+    volumes:
+    - warexo_code:/var/www/html
+    - warexo_state:/var/lib/warexo
+    networks:
+    - intake
+    - backend
+    depends_on:
+      db:
+        condition: service_healthy
+  warexo:
+    image: ${WAREXO_PORTING_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main-porting}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      WAREXO_BOOTSTRAP_MODE: clone
+      AGGRO_SSH_ENABLED: 'true'
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_NAME: warexo
+      DB_USER: warexo
+      DB_PASSWORD: ${SERVICE_PASSWORD_64_DB}
+      MAILER_TRANSPORT: smtp
+      MAILER_HOST: mailpit
+      MAILER_USER: ''
+      MAILER_PASSWORD: ''
+      WAREXO_LOCALE: ${WAREXO_LOCALE:-de_DE}
+      WAREXO_SECRET: ${SERVICE_BASE64_64_APP}
+      WAREXO_LICENSE: ${WAREXO_LICENSE:-}
+      WAREXO_COOKIE_LIFETIME: ${WAREXO_COOKIE_LIFETIME:-86400}
+      WAREXO_GC_MAX_LIFETIME: ${WAREXO_GC_MAX_LIFETIME:-1440}
+      WAREXO_COOKIE_SECURE: ${WAREXO_COOKIE_SECURE:-true}
+      WAREXO_PORTING_ENABLED: '1'
+      PORTING_DB_HOST: db
+      PORTING_DB_PORT: 3306
+      PORTING_DB_NAME: warexo_port
+      PORTING_DB_USER: warexo_port
+      PORTING_DB_PASSWORD: ${SERVICE_PASSWORD_64_PORTDB}
+      PORTING_APP_SECRET: ${SERVICE_BASE64_64_PORTAPP}
+      WAREXO_DEPS_PROXY: http://deps-proxy:3128
+    volumes:
+    - warexo_code:/var/www/html
+    - warexo_state:/var/lib/warexo
+    - vscode_server:/root/.vscode-server
+    - codex_home:/root/.codex
+    - warexo_porting_workspace:/workspace
+    networks:
+    - backend
+    depends_on:
+      clone:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+      porting-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - test -f /var/lib/warexo/clone-app-ready && curl --fail --silent --max-time 3 http://127.0.0.1/__warexo_runtime_health >/dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+    init: true
+  gateway:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    environment:
+      SERVICE_URL_GATEWAY_80: /
+      SERVICE_FQDN_GATEWAY: null
+    entrypoint:
+    - /bin/sh
+    - -ec
+    command:
+    - |
+      cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+      map $$http_x_forwarded_proto $$warexo_proto {
+        default $$http_x_forwarded_proto;
+        "" $$scheme;
+      }
+      server {
+        listen 80;
+        server_name _;
+        client_max_body_size 128m;
+        location ~ ^/(install|app_dev|restore)(\.php|/|$$) { return 404; }
+        location / {
+          proxy_buffer_size 128k;
+          proxy_buffers 4 128k;
+          proxy_pass http://warexo:80;
+          proxy_set_header Host $$http_host;
+          proxy_set_header X-Forwarded-Proto $$warexo_proto;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+          proxy_read_timeout 300s;
+        }
+      }
+      NGINX
+      exec nginx -g 'daemon off;'
+    expose:
+    - '80'
+    networks:
+    - default
+    - backend
+    depends_on:
+      warexo:
+        condition: service_healthy
+  db:
+    image: mariadb:10.11
+    restart: unless-stopped
+    environment:
+      MARIADB_ROOT_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
+      MARIADB_DATABASE: warexo
+      MARIADB_USER: warexo
+      MARIADB_PASSWORD: ${SERVICE_PASSWORD_64_DB}
+    command:
+    - mariadbd
+    - --character-set-server=utf8mb4
+    - --collation-server=utf8mb4_unicode_ci
+    - --innodb-file-per-table=1
+    - --event-scheduler=DISABLED
+    volumes:
+    - warexo_db:/var/lib/mysql
+    networks:
+    - backend
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - mariadb-admin ping -h 127.0.0.1 -u warexo -p"$$MARIADB_PASSWORD" --silent
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_SMTP_BIND_ADDR: 0.0.0.0:25
+    networks:
+    - backend
+  porting-init:
+    image: ${WAREXO_PORTING_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main-porting}
+    pull_policy: always
+    restart: 'no'
+    entrypoint:
+    - python3
+    - /opt/warexo/porting/workspace.py
+    command: null
+    environment:
+      DB_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
+      REFERENCE_DB_NAME: warexo
+      PORTING_DB_HOST: db
+      PORTING_DB_PORT: 3306
+      PORTING_DB_NAME: warexo_port
+      PORTING_DB_USER: warexo_port
+      PORTING_DB_PASSWORD: ${SERVICE_PASSWORD_64_PORTDB}
+      PORTING_APP_SECRET: ${SERVICE_BASE64_64_PORTAPP}
+      MAILER_HOST: mailpit
+      WAREXO_LOCALE: ${WAREXO_LOCALE:-de_DE}
+      WAREXO_LICENSE: ${WAREXO_LICENSE:-}
+      WAREXO_COOKIE_SECURE: ${WAREXO_COOKIE_SECURE:-true}
+      WAREXO_COOKIE_LIFETIME: ${WAREXO_COOKIE_LIFETIME:-86400}
+      WAREXO_GC_MAX_LIFETIME: ${WAREXO_GC_MAX_LIFETIME:-1440}
+    volumes:
+    - warexo_code:/reference:ro
+    - warexo_state:/reference-state:ro
+    - warexo_porting_workspace:/workspace
+    networks:
+    - backend
+    depends_on:
+      clone:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+  porting-gateway:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    environment:
+      SERVICE_URL_PORTING_GATEWAY_80: /
+      SERVICE_FQDN_PORTING_GATEWAY: null
+    entrypoint:
+    - /bin/sh
+    - -ec
+    command:
+    - |
+      cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+      map $$http_x_forwarded_proto $$warexo_proto {
+        default $$http_x_forwarded_proto;
+        "" $$scheme;
+      }
+      server {
+        listen 80;
+        server_name _;
+        client_max_body_size 128m;
+        location ~ ^/(install|app_dev|restore)(\.php|/|$$) { return 404; }
+        location / {
+          proxy_buffer_size 128k;
+          proxy_buffers 4 128k;
+          proxy_pass http://warexo:8084;
+          proxy_set_header Host $$http_host;
+          proxy_set_header X-Forwarded-Proto $$warexo_proto;
+          proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+          proxy_read_timeout 300s;
+        }
+      }
+      NGINX
+      exec nginx -g 'daemon off;'
+    expose:
+    - '80'
+    networks:
+    - default
+    - backend
+    depends_on:
+      warexo:
+        condition: service_healthy
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - test "$$(wget -q -O - http://127.0.0.1/__warexo_porting_health)" = php84-ready
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+  deps-proxy:
+    image: ${WAREXO_PORTING_PROXY_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main-porting-proxy}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      PORTING_ALLOWED_HOSTS: ${PORTING_ALLOWED_HOSTS:-github.com api.github.com codeload.github.com raw.githubusercontent.com objects.githubusercontent.com release-assets.githubusercontent.com packagist.org repo.packagist.org getcomposer.org}
+    networks:
+    - backend
+    - porting_egress
+    cap_drop:
+    - ALL
+    security_opt:
+    - no-new-privileges:true
+networks:
+  default: {}
+  intake: {}
+  backend:
+    internal: true
+  porting_egress: {}
+volumes:
+  warexo_code: null
+  warexo_state: null
+  warexo_db: null
+  vscode_server: null
+  codex_home: null
+  warexo_porting_workspace: null

@@ -1,0 +1,14 @@
+services:
+  warexo:
+    pull_policy: never
+  porting-init:
+    pull_policy: never
+  deps-proxy:
+    pull_policy: never
+    environment:
+      PORTING_ALLOWED_HOSTS: github.com api.github.com codeload.github.com raw.githubusercontent.com objects.githubusercontent.com release-assets.githubusercontent.com packagist.org repo.packagist.org getcomposer.org private.fixture.invalid
+    extra_hosts:
+      - private.fixture.invalid:127.0.0.1
+  porting-gateway:
+    ports:
+      - "127.0.0.1::80"

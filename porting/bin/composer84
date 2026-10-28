@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Commands that can read project plugins/scripts or change dependencies belong
+# only in the porting workspace. Never install over the deployed vendor tree.
+if [[ $# == 1 && "$1" =~ ^(--version|-V|--help|-h)$ ]]; then
+    cd /tmp
+else
+    directory="$PWD"
+    previous=""
+    for argument in "$@"; do
+        if [[ "$previous" == directory ]]; then
+            directory="$argument"
+            previous=""
+        elif [[ "$argument" == -d || "$argument" == --working-dir ]]; then
+            previous=directory
+        elif [[ "$argument" == --working-dir=* ]]; then
+            directory="${argument#*=}"
+        elif [[ "$argument" == -d?* ]]; then
+            directory="${argument#-d}"
+        fi
+    done
+    directory="$(realpath -e "$directory")"
+    case "$directory" in
+        /workspace|/workspace/*) ;;
+        *) echo '[warexo-porting] Composer 2 is restricted to /workspace; the reference vendor tree is preserved.' >&2; exit 1 ;;
+    esac
+    manifest="${COMPOSER:-composer.json}"
+    [[ "$manifest" == /* ]] || manifest="$directory/$manifest"
+    case "$(realpath -m "$manifest")" in
+        /workspace/*) ;;
+        *) echo '[warexo-porting] COMPOSER must not select a manifest outside /workspace.' >&2; exit 1 ;;
+    esac
+fi
+export COMPOSER_HOME=/workspace/.composer84
+export COMPOSER_CACHE_DIR=/workspace/.composer84/cache
+mkdir -p "$COMPOSER_CACHE_DIR"
+exec /usr/local/bin/php84 /opt/php84/share/composer.phar "$@"

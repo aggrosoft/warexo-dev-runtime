@@ -1,0 +1,62 @@
+# Optional development image. The normal Dockerfile and its runtime stay intact.
+ARG BASE_IMAGE=ghcr.io/aggrosoft/warexo-dev-runtime:main
+FROM ${BASE_IMAGE} AS php84-build
+
+ARG PHP84_VERSION=8.4.27
+ARG PHP84_SHA256=dcf93923b0e38e0d5252b25b796520b5a47761a08b3488b6d0b5d1115764d3f0
+ARG COMPOSER84_VERSION=2.10.3
+ARG COMPOSER84_SHA256=7a2d379d5b8ffdaa028580ef26494c36d2feef4b178d3dd1473a4dbc5e17c8d6
+
+# Build against the very same distribution and libraries as PHP 7.4. Copying
+# /usr/local from a newer official PHP image would mix incompatible runtimes.
+RUN apt-get -o Acquire::Check-Valid-Until=false update \
+    && apt-get install -y --no-install-recommends \
+        $PHPIZE_DEPS libargon2-dev libedit-dev libsodium-dev libsqlite3-dev \
+        libssl-dev xz-utils zlib1g-dev \
+    && mkdir -p /tmp/php84-source /opt/php84/etc/conf.d /opt/php84/share \
+    && curl --fail --location --retry 3 "https://www.php.net/distributions/php-${PHP84_VERSION}.tar.xz" -o /tmp/php84.tar.xz \
+    && printf '%s  %s\n' "$PHP84_SHA256" /tmp/php84.tar.xz | sha256sum --check --strict \
+    && tar -xJf /tmp/php84.tar.xz -C /tmp/php84-source --strip-components=1 \
+    && cd /tmp/php84-source \
+    && ./configure \
+        --prefix=/opt/php84 \
+        --with-config-file-path=/opt/php84/etc \
+        --with-config-file-scan-dir=/opt/php84/etc/conf.d \
+        --enable-option-checking=fatal \
+        --enable-cli --enable-fpm --disable-cgi --without-pear \
+        --enable-bcmath --enable-exif --enable-gd --with-freetype --with-jpeg \
+        --enable-intl --enable-mbstring --enable-mysqlnd --enable-opcache \
+        --enable-pcntl --enable-soap \
+        --with-curl --with-libedit --with-mysqli=mysqlnd \
+        --with-openssl --with-password-argon2 --with-pdo-mysql=mysqlnd \
+        --with-pdo-sqlite --with-sodium --with-sqlite3 --with-zip --with-zlib \
+    && make -j"$(nproc)" \
+    && make install \
+    && cp php.ini-production /opt/php84/etc/php.ini \
+    && curl --fail --location --retry 3 "https://getcomposer.org/download/${COMPOSER84_VERSION}/composer.phar" -o /opt/php84/share/composer.phar \
+    && printf '%s  %s\n' "$COMPOSER84_SHA256" /opt/php84/share/composer.phar | sha256sum --check --strict \
+    && /opt/php84/bin/php -v \
+    && /opt/php84/bin/php /opt/php84/share/composer.phar --version
+
+FROM ${BASE_IMAGE}
+
+ENV WAREXO_PORTING_ENABLED=0
+
+COPY --from=php84-build /opt/php84 /opt/php84
+COPY porting/ /opt/warexo/porting/
+COPY porting/php84.ini /opt/php84/etc/conf.d/warexo.ini
+COPY porting/php84-fpm.conf /opt/php84/etc/php-fpm.conf
+
+RUN mkdir -p /workspace \
+    && chown developer:developer /workspace \
+    && chmod +x /opt/warexo/porting/entrypoint.sh \
+    && for wrapper in /opt/warexo/porting/bin/*; do \
+        chmod +x "$wrapper"; \
+        ln -s "$wrapper" "/usr/local/bin/$(basename "$wrapper")"; \
+    done \
+    && php74 -v \
+    && php84 -v \
+    && php84 -r 'foreach (["bcmath", "curl", "gd", "intl", "mbstring", "mysqli", "pdo_mysql", "soap", "zip", "openssl", "sodium", "pdo_sqlite"] as $extension) { if (!extension_loaded($extension)) { fwrite(STDERR, "Missing extension: ".$extension."\n"); exit(1); } }'
+
+ENTRYPOINT ["/opt/warexo/porting/entrypoint.sh"]
+CMD ["apache2-foreground"]

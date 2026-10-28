@@ -24,12 +24,16 @@ jobs:
           bash -n docker/entrypoint.sh
           for script in bin/*; do bash -n "$script"; done
           bash -n tests/test-clone-integration.sh
+          bash -n porting/entrypoint.sh
+          for script in porting/bin/*; do bash -n "$script"; done
+          bash -n tests/test-porting-integration.sh
 
       - name: Run clone and bootstrap unit tests
         run: |
           python3 -m pip install 'PyYAML>=6,<7'
           python3 -m unittest discover -s tests -v
           python3 -m compileall -q clone
+          python3 -m compileall -q porting
 
       - name: Validate Coolify Compose template
         run: |
@@ -45,6 +49,17 @@ jobs:
           SOURCE_SSH_KNOWN_HOSTS: dummy-validation-only
           SOURCE_WAREXO_PATH: /srv/warexo
         run: docker compose -f compose.clone.coolify.example.yaml config >/dev/null
+
+      - name: Validate optional porting templates
+        env:
+          SOURCE_SSH_HOST: source.example.invalid
+          SOURCE_SSH_USER: example
+          SOURCE_SSH_PRIVATE_KEY: dummy-validation-only
+          SOURCE_SSH_KNOWN_HOSTS: dummy-validation-only
+          SOURCE_WAREXO_PATH: /srv/warexo
+        run: |
+          docker compose -f compose.clone.coolify.example.yaml -f compose.porting.override.yaml config >/dev/null
+          docker compose -f compose.clone.porting.coolify.example.yaml config >/dev/null
 
   build:
     needs: validate
@@ -90,6 +105,21 @@ jobs:
           WAREXO_RUNTIME_IMAGE: warexo-runtime:test
         run: bash tests/test-clone-integration.sh
 
+      - name: Build optional dual-PHP image and dependency proxy
+        run: |
+          docker buildx build --builder default --load --build-arg BASE_IMAGE=warexo-runtime:test \
+            -f Dockerfile.porting -t warexo-runtime:porting-test .
+          docker buildx build --builder default --load \
+            -f Dockerfile.porting-proxy -t warexo-runtime:porting-proxy-test .
+
+      - name: Verify optional dual-PHP lifecycle and isolation
+        env:
+          WAREXO_RUNTIME_IMAGE: warexo-runtime:test
+          WAREXO_PORTING_IMAGE: warexo-runtime:porting-test
+          WAREXO_PORTING_PROXY_IMAGE: warexo-runtime:porting-proxy-test
+          WAREXO_TEST_PORTING: "1"
+        run: bash tests/test-clone-integration.sh
+
       - name: Publish verified image
         if: github.event_name != 'pull_request'
         env:
@@ -99,5 +129,9 @@ jobs:
             [ -n "$tag" ] || continue
             docker tag warexo-runtime:test "$tag"
             docker push "$tag"
+            docker tag warexo-runtime:porting-test "${tag}-porting"
+            docker push "${tag}-porting"
+            docker tag warexo-runtime:porting-proxy-test "${tag}-porting-proxy"
+            docker push "${tag}-porting-proxy"
           done <<< "$IMAGE_TAGS"
 

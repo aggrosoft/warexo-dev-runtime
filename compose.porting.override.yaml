@@ -1,0 +1,146 @@
+# Optional addition to compose.clone.coolify.example.yaml; never use by itself.
+# Keep the SAME Compose project and existing reference volumes when enabling it.
+services:
+  clone:
+    # Compatibility with Coolify's validator; no changed importer behavior.
+    command: null
+
+  warexo:
+    image: ${WAREXO_PORTING_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main-porting}
+    init: true
+    environment:
+      WAREXO_PORTING_ENABLED: "1"
+      PORTING_DB_HOST: db
+      PORTING_DB_PORT: 3306
+      PORTING_DB_NAME: warexo_port
+      PORTING_DB_USER: warexo_port
+      PORTING_DB_PASSWORD: ${SERVICE_PASSWORD_64_PORTDB}
+      PORTING_APP_SECRET: ${SERVICE_BASE64_64_PORTAPP}
+      WAREXO_DEPS_PROXY: http://deps-proxy:3128
+    volumes:
+      - warexo_porting_workspace:/workspace
+    depends_on:
+      porting-init:
+        condition: service_completed_successfully
+
+  porting-init:
+    image: ${WAREXO_PORTING_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main-porting}
+    pull_policy: always
+    restart: "no"
+    entrypoint: ["python3", "/opt/warexo/porting/workspace.py"]
+    command: null
+    environment:
+      DB_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
+      REFERENCE_DB_NAME: warexo
+      PORTING_DB_HOST: db
+      PORTING_DB_PORT: 3306
+      PORTING_DB_NAME: warexo_port
+      PORTING_DB_USER: warexo_port
+      PORTING_DB_PASSWORD: ${SERVICE_PASSWORD_64_PORTDB}
+      PORTING_APP_SECRET: ${SERVICE_BASE64_64_PORTAPP}
+      MAILER_HOST: mailpit
+      WAREXO_LOCALE: ${WAREXO_LOCALE:-de_DE}
+      WAREXO_LICENSE: ${WAREXO_LICENSE:-}
+      WAREXO_COOKIE_SECURE: ${WAREXO_COOKIE_SECURE:-true}
+      WAREXO_COOKIE_LIFETIME: ${WAREXO_COOKIE_LIFETIME:-86400}
+      WAREXO_GC_MAX_LIFETIME: ${WAREXO_GC_MAX_LIFETIME:-1440}
+    volumes:
+      - warexo_code:/reference:ro
+      - warexo_state:/reference-state:ro
+      - warexo_porting_workspace:/workspace
+    networks: [backend]
+    depends_on:
+      clone:
+        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+
+  # The reference keeps its original URL and PHP 7.4 endpoint.
+  gateway:
+    command:
+      - |
+        cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+        map $$http_x_forwarded_proto $$warexo_proto {
+          default $$http_x_forwarded_proto;
+          "" $$scheme;
+        }
+        server {
+          listen 80;
+          server_name _;
+          client_max_body_size 128m;
+          location ~ ^/(install|app_dev|restore)(\.php|/|$$) { return 404; }
+          location / {
+            proxy_buffer_size 128k;
+            proxy_buffers 4 128k;
+            proxy_pass http://warexo:80;
+            proxy_set_header Host $$http_host;
+            proxy_set_header X-Forwarded-Proto $$warexo_proto;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_read_timeout 300s;
+          }
+        }
+        NGINX
+        exec nginx -g 'daemon off;'
+
+  # A second ingress, not a second application container. Both PHP runtimes
+  # execute inside the same warexo service reached by the existing SSH bridge.
+  porting-gateway:
+    image: nginx:1.28-alpine
+    restart: unless-stopped
+    environment:
+      SERVICE_URL_PORTING_GATEWAY_80: /
+      SERVICE_FQDN_PORTING_GATEWAY: null
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - |
+        cat > /etc/nginx/conf.d/default.conf <<'NGINX'
+        map $$http_x_forwarded_proto $$warexo_proto {
+          default $$http_x_forwarded_proto;
+          "" $$scheme;
+        }
+        server {
+          listen 80;
+          server_name _;
+          client_max_body_size 128m;
+          location ~ ^/(install|app_dev|restore)(\.php|/|$$) { return 404; }
+          location / {
+            proxy_buffer_size 128k;
+            proxy_buffers 4 128k;
+            proxy_pass http://warexo:8084;
+            proxy_set_header Host $$http_host;
+            proxy_set_header X-Forwarded-Proto $$warexo_proto;
+            proxy_set_header X-Forwarded-For $$proxy_add_x_forwarded_for;
+            proxy_read_timeout 300s;
+          }
+        }
+        NGINX
+        exec nginx -g 'daemon off;'
+    expose: ["80"]
+    networks: [default, backend]
+    depends_on:
+      warexo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "test \"$$(wget -q -O - http://127.0.0.1/__warexo_porting_health)\" = php84-ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  # HTTPS-only, exact-host allowlist. No application data or credentials here.
+  # The application is NOT attached to this service's routed egress network.
+  deps-proxy:
+    image: ${WAREXO_PORTING_PROXY_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main-porting-proxy}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      PORTING_ALLOWED_HOSTS: ${PORTING_ALLOWED_HOSTS:-github.com api.github.com codeload.github.com raw.githubusercontent.com objects.githubusercontent.com release-assets.githubusercontent.com packagist.org repo.packagist.org getcomposer.org}
+    networks: [backend, porting_egress]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+networks:
+  porting_egress: {}
+
+volumes:
+  warexo_porting_workspace:

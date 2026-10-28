@@ -12,6 +12,11 @@ WAREXO_TEST_TMP=$(mktemp -d /tmp/warexo-clone-test.XXXXXXXX)
 source_compose=(docker compose -p "$test_project-source" -f tests/integration/source-compose.yaml)
 target_compose=(docker compose -p "$test_project" -f compose.clone.coolify.example.yaml -f tests/integration/target-override.yaml)
 failed_compose=(docker compose -p "$test_project-failed" -f compose.clone.coolify.example.yaml -f tests/integration/target-override.yaml)
+if [[ ${WAREXO_TEST_PORTING:-0} == 1 ]]; then
+    target_compose+=( -f compose.porting.override.yaml -f tests/integration/porting-override.yaml )
+    export SERVICE_PASSWORD_64_PORTDB=porting-app-fixture-password
+    export SERVICE_BASE64_64_PORTAPP=separate-porting-fixture-secret
+fi
 cleanup() {
     local status=$?
     trap - EXIT
@@ -77,6 +82,11 @@ if "${target_compose[@]}" exec -T warexo curl --noproxy '*' --fail --silent --ma
     echo 'FAIL: application reached the external intake canary.' >&2
     exit 1
 fi
+if [[ ${WAREXO_TEST_PORTING:-0} == 1 ]]; then
+    # Sourced deliberately: reuse this isolated fixture's exact Compose project.
+    source tests/test-porting-integration.sh
+    verify_porting_initial
+fi
 source_files > "$WAREXO_TEST_TMP/files-after"
 source_database > "$WAREXO_TEST_TMP/database-after"
 cmp "$WAREXO_TEST_TMP/files-before" "$WAREXO_TEST_TMP/files-after"
@@ -110,6 +120,10 @@ Path('/var/www/html/web/local-edit.txt').write_text('retained local file')
 PY
 "${source_compose[@]}" down
 "${target_compose[@]}" run --rm --no-deps clone
+if [[ ${WAREXO_TEST_PORTING:-0} == 1 ]]; then
+    # Reuse cannot need root credentials or source access after initialization.
+    "${target_compose[@]}" run --rm --no-deps -e DB_ADMIN_PASSWORD=deliberately-wrong porting-init
+fi
 "${target_compose[@]}" restart warexo
 "${target_compose[@]}" up -d --wait --wait-timeout 180 warexo gateway
 "${target_compose[@]}" exec -T warexo python3 - <<'PY'
@@ -124,4 +138,7 @@ with db.cursor() as cursor:
 assert Path('/var/www/html/web/local-edit.txt').read_text() == 'retained local file'
 assert Path('/var/lib/warexo/clone-app-ready').exists()
 PY
+if [[ ${WAREXO_TEST_PORTING:-0} == 1 ]]; then
+    verify_porting_restart
+fi
 echo 'PASS: SSH import, sanitization, source preservation, egress isolation, failed startup and source-independent restart.'

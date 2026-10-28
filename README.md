@@ -13,9 +13,14 @@ Do **not** deploy this repository as a normal GitHub application in Coolify. Cre
 | Goal | Template | Setup |
 | --- | --- | --- |
 | Work on a copy of an existing installation, including its database and deployed vendor patches | `compose.clone.coolify.example.yaml` | [SSH clone setup](CLONE.md) |
+| Opt in to PHP 7.4 + PHP 8.4 in one clone container, with separate porting files and database | `compose.clone.porting.coolify.example.yaml` | [Optional porting workspace](PORTING.md) |
 | Install a blank Warexo instance from Git | `compose.coolify.example.yaml` | Fresh-install instructions below |
 
 The clone mode accepts SSH access and an installation path. It reads the source database configuration, copies the deployed files, imports a transactional database dump, neutralizes known credentials, and starts Warexo only after these steps succeed. It does not run the live application, Composer, or the installer on the source.
+
+Dual-PHP porting is a separate opt-in image/Compose variant. The standard
+image and clone workflow remain PHP 7.4-only. To add it to an existing clone,
+keep that Coolify resource and its reference volumes; see [PORTING.md](PORTING.md).
 
 ## Runtime
 

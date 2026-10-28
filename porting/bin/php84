@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+unset PHPRC PHP_INI_SCAN_DIR
+export PATH="/opt/php84/bin:$PATH"
+export PHP_INI_SCAN_DIR=/opt/php84/etc/conf.d
+# A migrated console must not accidentally inherit the reference DB variables.
+unset DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD DB_PASSWORD_FILE
+unset DATABASE_URL WAREXO_SECRET WAREXO_SECRET_FILE
+for key in DB_HOST DB_PORT DB_NAME DB_USER DB_PASSWORD DATABASE_URL; do
+    porting_key="PORTING_$key"
+    if [[ -v "$porting_key" ]]; then
+        export "$key=${!porting_key}"
+    fi
+done
+if [[ -v PORTING_APP_SECRET ]]; then
+    export WAREXO_SECRET="$PORTING_APP_SECRET"
+fi
+exec /opt/php84/bin/php -c /opt/php84/etc/php.ini "$@"

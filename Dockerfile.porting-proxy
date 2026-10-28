@@ -1,0 +1,10 @@
+FROM debian:bookworm-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends squid python3 ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY porting/deps_proxy.py /opt/warexo/deps_proxy.py
+USER proxy
+EXPOSE 3128
+ENTRYPOINT ["python3", "/opt/warexo/deps_proxy.py"]

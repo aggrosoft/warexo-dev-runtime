@@ -1,0 +1,120 @@
+"""Keep the optional Coolify template aligned with its additive Compose overlay."""
+import copy
+from pathlib import Path
+import unittest
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def merge(base, extra, key=None):
+    """Compose merge subset used here: mappings, unique lists, replace commands."""
+    if isinstance(base, dict) and isinstance(extra, dict):
+        result = copy.deepcopy(base)
+        for name, value in extra.items():
+            result[name] = merge(result[name], value, name) if name in result else copy.deepcopy(value)
+        return result
+    if isinstance(base, list) and isinstance(extra, list) and key not in ('command', 'entrypoint', 'test'):
+        return base + [item for item in extra if item not in base]
+    return copy.deepcopy(extra)
+
+
+class PortingComposeTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.base = yaml.safe_load((ROOT / 'compose.clone.coolify.example.yaml').read_text())
+        cls.extra = yaml.safe_load((ROOT / 'compose.porting.override.yaml').read_text())
+        cls.full = yaml.safe_load((ROOT / 'compose.clone.porting.coolify.example.yaml').read_text())
+        cls.services = cls.full['services']
+
+    def test_standalone_template_is_the_overlay_applied_to_clone(self):
+        self.assertEqual(self.full, merge(self.base, self.extra))
+
+    def test_existing_templates_and_image_do_not_enable_porting(self):
+        for filename in ('compose.clone.coolify.example.yaml', 'compose.coolify.example.yaml'):
+            text = (ROOT / filename).read_text()
+            self.assertNotIn('WAREXO_PORTING_ENABLED', text)
+            self.assertNotIn('main-porting', text)
+            self.assertNotIn('warexo_porting_workspace', text)
+        self.assertNotIn('porting', (ROOT / 'Dockerfile').read_text().lower())
+
+    def test_reference_database_and_volumes_are_preserved(self):
+        self.assertEqual(self.services['db'], self.base['services']['db'])
+        self.assertEqual(self.services['mailpit'], self.base['services']['mailpit'])
+        for name, value in self.base['volumes'].items():
+            self.assertEqual(self.full['volumes'][name], value)
+        old = self.base['services']['warexo']
+        new = self.services['warexo']
+        for key, value in old['environment'].items():
+            self.assertEqual(new['environment'][key], value)
+        self.assertTrue(set(old['volumes']).issubset(new['volumes']))
+        self.assertEqual(new['healthcheck'], old['healthcheck'])
+        self.assertEqual(self.services['clone']['environment'], self.base['services']['clone']['environment'])
+
+    def test_application_has_one_internal_network_and_no_admin_credentials(self):
+        app = self.services['warexo']
+        self.assertEqual(app['networks'], ['backend'])
+        self.assertTrue(self.full['networks']['backend']['internal'])
+        self.assertEqual(app['environment']['WAREXO_PORTING_ENABLED'], '1')
+        for key, value in app['environment'].items():
+            self.assertFalse(key.startswith('SOURCE_'))
+            self.assertNotIn('ADMIN_PASSWORD', key)
+            self.assertNotIn('DBROOT', str(value))
+            self.assertNotIn(key.lower(), ('http_proxy', 'https_proxy', 'all_proxy'))
+        for name, service in self.services.items():
+            self.assertFalse(service.get('privileged'), name)
+            self.assertNotEqual(service.get('network_mode'), 'host', name)
+            self.assertNotIn('ports', service, name)
+            for volume in service.get('volumes', []):
+                self.assertNotIn('docker.sock', volume)
+
+    def test_initializer_only_reads_reference_and_gates_app_start(self):
+        init = self.services['porting-init']
+        self.assertEqual(init['networks'], ['backend'])
+        self.assertEqual(init['entrypoint'], ['python3', '/opt/warexo/porting/workspace.py'])
+        self.assertIsNone(init['command'])
+        self.assertIsNone(self.services['clone']['command'])
+        self.assertIn('warexo_code:/reference:ro', init['volumes'])
+        self.assertIn('warexo_state:/reference-state:ro', init['volumes'])
+        self.assertIn('warexo_porting_workspace:/workspace', init['volumes'])
+        self.assertEqual(init['depends_on']['clone']['condition'], 'service_completed_successfully')
+        self.assertEqual(self.services['warexo']['depends_on']['porting-init']['condition'], 'service_completed_successfully')
+        self.assertFalse(any(key.startswith('SOURCE_') for key in init['environment']))
+
+    def test_target_database_credentials_are_consistent_and_distinct(self):
+        app = self.services['warexo']['environment']
+        init = self.services['porting-init']['environment']
+        for key in ('PORTING_DB_HOST', 'PORTING_DB_PORT', 'PORTING_DB_NAME', 'PORTING_DB_USER', 'PORTING_DB_PASSWORD', 'PORTING_APP_SECRET'):
+            self.assertEqual(app[key], init[key])
+        self.assertNotEqual(app['PORTING_DB_NAME'], app['DB_NAME'])
+        self.assertNotEqual(app['PORTING_DB_USER'], app['DB_USER'])
+        self.assertNotEqual(app['PORTING_DB_PASSWORD'], app['DB_PASSWORD'])
+        self.assertEqual(init['REFERENCE_DB_NAME'], app['DB_NAME'])
+
+    def test_gateways_have_separate_fixed_upstreams_and_same_guards(self):
+        for name, port in (('gateway', 80), ('porting-gateway', 8084)):
+            service = self.services[name]
+            command = service['command'][0]
+            self.assertIn('proxy_pass http://warexo:' + str(port) + ';', command)
+            self.assertIn('(install|app_dev|restore)', command)
+            self.assertIn('proxy_buffer_size 128k;', command)
+            self.assertIn('proxy_buffers 4 128k;', command)
+            self.assertEqual(set(service['networks']), {'default', 'backend'})
+        self.assertIn('php84-ready', self.services['porting-gateway']['healthcheck']['test'][1])
+
+    def test_dependency_proxy_does_not_mount_application_or_receive_secrets(self):
+        proxy = self.services['deps-proxy']
+        self.assertEqual(set(proxy['networks']), {'backend', 'porting_egress'})
+        self.assertFalse(proxy.get('volumes'))
+        self.assertFalse(proxy.get('ports'))
+        self.assertEqual(set(proxy['environment']), {'PORTING_ALLOWED_HOSTS'})
+        hosts = proxy['environment']['PORTING_ALLOWED_HOSTS']
+        self.assertNotIn('*', hosts)
+        self.assertNotIn('openai', hosts)
+        self.assertEqual(self.services['warexo']['environment']['WAREXO_DEPS_PROXY'], 'http://deps-proxy:3128')
+
+
+if __name__ == '__main__':
+    unittest.main()

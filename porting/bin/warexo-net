@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Opt in for exactly one tool invocation; web/FPM processes inherit no proxy.
+set -euo pipefail
+if (( $# == 0 )); then
+    echo 'Usage: warexo-net COMMAND [ARG ...] (HTTPS allowlisted dependencies only)' >&2
+    exit 2
+fi
+proxy="${WAREXO_DEPS_PROXY:-http://deps-proxy:3128}"
+if [[ ! "$proxy" =~ ^http://[A-Za-z0-9.-]+:[0-9]+$ ]]; then
+    echo 'WAREXO_DEPS_PROXY must be a plain internal http://hostname:port URL.' >&2
+    exit 2
+fi
+export http_proxy="$proxy" https_proxy="$proxy" HTTP_PROXY="$proxy" HTTPS_PROXY="$proxy"
+# Do not let inherited NO_PROXY bypass the allowlist for public hosts.
+export no_proxy=localhost,127.0.0.1,::1 NO_PROXY=localhost,127.0.0.1,::1
+unset ALL_PROXY all_proxy
+exec "$@"

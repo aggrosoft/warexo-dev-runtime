@@ -4,6 +4,11 @@ Use `compose.clone.coolify.example.yaml` for a disposable copy of an existing in
 
 This is the legacy PHP 7.4 baseline for reproducing customer behavior before changing PHP/Symfony. It does not itself upgrade either version.
 
+An [optional dual-PHP workspace](PORTING.md) adds PHP 8.4, Composer 2, separate
+porting files, and a separate local database to the same application container.
+It uses an additional image/Compose variant; this standard clone setup remains
+unchanged. Enable it on an existing clone without replacing its reference volumes.
+
 ## Create the Coolify resource
 
 1. Create a **new Docker Compose resource** on the development host. Use fresh code, state, and database volumes; do not point this at an existing development database.
@@ -70,6 +75,10 @@ The database snapshot is transactional. The file copy and database dump are **no
 Only the one-shot importer receives the source SSH credentials and has an outbound network. The application, database, and Mailpit share an internal backend network. A separate nginx gateway exposes a fixed upstream to Warexo. The database event scheduler is disabled at server startup, and event definitions are archived without restoring them (MariaDB also disallows event DDL when the scheduler is `DISABLED`). Warexo cron jobs are absent, and the installer/debug/restore entrypoints are removed or blocked. Mail is configured to the local Mailpit service.
 
 Keep that network topology when deploying in Coolify. Adding a routed network to `warexo` bypasses the outbound boundary. Git fetches, Composer downloads, and agents that need external APIs should run in a separate development/controller service; the imported application intentionally has no general internet access.
+
+The optional [porting variant](PORTING.md#git-and-package-access-without-opening-the-application-network)
+provides an explicit, exact-host HTTPS dependency proxy instead of adding a
+routed network to the application. This is not enabled by the standard template.
 
 Known secrets are neutralized, but arbitrary custom integrations and business fields cannot be fully classified automatically. The clone retains customer/business documents and personal data. Treat access to it accordingly; this is not a public demo dataset. A valid development license and installation-specific configuration may still be needed for the real application to start.
 

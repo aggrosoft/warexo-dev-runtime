@@ -179,11 +179,7 @@ jobs:
           docker tag ghcr.io/aggrosoft/warexo-dev-runtime:main-porting warexo-runtime:porting-test
           docker tag ghcr.io/aggrosoft/warexo-dev-runtime:main-porting-proxy warexo-runtime:porting-proxy-test
 
-      - name: Verify SSH clone lifecycle and isolation
-        env:
-          WAREXO_RUNTIME_IMAGE: warexo-runtime:test
-        run: bash tests/test-clone-integration.sh
-
+      # The porting integration already runs the complete clone and isolation checks.
       - name: Verify optional dual-PHP lifecycle and isolation
         env:
           WAREXO_RUNTIME_IMAGE: warexo-runtime:test

@@ -55,6 +55,7 @@ services:
     restart: unless-stopped
     environment:
       <<: *source_credentials_redacted
+      DB_ADMIN_PASSWORD: '' # Coolify v4 env_file override; root DB secret is init-only
       WAREXO_BOOTSTRAP_MODE: clone
       AGGRO_SSH_ENABLED: 'true'
       DB_HOST: db

@@ -23,6 +23,7 @@ services:
     init: true
     environment:
       <<: *source_credentials_redacted
+      DB_ADMIN_PASSWORD: "" # Coolify v4 env_file override; root DB secret is init-only
       WAREXO_PORTING_ENABLED: "1"
       PORTING_DB_HOST: db
       PORTING_DB_PORT: 3306

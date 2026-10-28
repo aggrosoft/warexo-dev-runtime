@@ -7,7 +7,7 @@ import pymysql
 import yaml
 
 ref, app = Path('/var/www/html'), Path('/workspace/warexo-port')
-assert not any(key.startswith('SOURCE_') for key in os.environ)
+# Coolify v4 injects the shared .env; explicit empty service values must win.\nassert not any(key.startswith('SOURCE_') and value for key, value in os.environ.items())
 assert 'DB_ADMIN_PASSWORD' not in os.environ
 assert not any(key in os.environ for key in ('http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY'))
 assert (app / 'vendor/custom-patch.txt').read_bytes() == (ref / 'vendor/custom-patch.txt').read_bytes()

@@ -42,7 +42,23 @@ Do not rerun the source import to enable this feature. With the same reference
 volumes and a valid completed clone, the existing importer verifies its local
 state and makes no source connection. Only the original `clone` service retains
 its existing `SOURCE_*` settings; the workbench and its initializer never receive
-them. The new initializer copies from the already neutralized local clone.
+nonempty values of them. The new initializer copies from the already
+neutralized local clone.
+
+**Coolify v4 Compose caveat:** Coolify can inject the resource-wide `.env`
+into **every** container via `env_file`, including containers that do not
+reference those settings. Both supplied porting Compose files explicitly
+override all known `SOURCE_*` keys to empty strings in non-clone services;
+`clone` retains its source access. This is essential for `porting-init`, which
+fails closed if any nonempty `SOURCE_*` value reaches it. When adapting a
+custom Compose, preserve those blank entries, or the initializer will report
+`The porting initializer must not receive SOURCE_* credentials or configuration.`
+Check the **raw generated** Compose in Coolify after saving. This redaction
+addresses the known source keys only: Coolify v4's global environment handling
+still prevents a general guarantee that *other* service secrets remain private
+between containers of the same resource. Keep this development deployment
+private; for strict per-container secret isolation, use separately scoped
+resources/a runtime without project-wide secret injection.
 
 For ordinary Docker Compose, the additive equivalent is:
 

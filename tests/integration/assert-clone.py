@@ -9,7 +9,7 @@ import pymysql
 import yaml
 
 app, state = Path('/var/www/html'), Path('/var/lib/warexo')
-assert not any(name.startswith('SOURCE_') for name in os.environ)
+assert not any(name.startswith('SOURCE_') and value for name, value in os.environ.items()), 'Source SSH values must be redacted'
 assert (app / 'vendor/custom-patch.txt').read_text() == 'deployed vendor patch must survive\n'
 assert (app / 'web/uploads/customer.txt').read_text() == 'synthetic uploaded document\n'
 assert (app / 'app/warmup-ran').is_file()

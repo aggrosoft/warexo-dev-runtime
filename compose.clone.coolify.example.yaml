@@ -95,6 +95,9 @@ services:
           client_max_body_size 128m;
           location ~ ^/(install|app_dev|restore)(\.php|/|$$) { return 404; }
           location / {
+            # Legacy Warexo may return large response headers on edit pages.
+            proxy_buffer_size 128k;
+            proxy_buffers 4 128k;
             proxy_pass http://warexo:80;
             proxy_set_header Host $$http_host;
             proxy_set_header X-Forwarded-Proto $$warexo_proto;

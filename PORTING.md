@@ -40,25 +40,19 @@ The standard image and templates do not acquire any of these services.
 
 Do not rerun the source import to enable this feature. With the same reference
 volumes and a valid completed clone, the existing importer verifies its local
-state and makes no source connection. Only the original `clone` service retains
-its existing `SOURCE_*` settings; the workbench and its initializer never receive
-nonempty values of them. The new initializer copies from the already
-neutralized local clone.
+state and makes no source connection. The porting initializer copies only from
+the already neutralized local clone. It **never reads or uses `SOURCE_*`** and
+does not require any source SSH access.
 
 **Coolify v4 Compose caveat:** Coolify can inject the resource-wide `.env`
-into **every** container via `env_file`, including containers that do not
-reference those settings. Both supplied porting Compose files explicitly
-override all known `SOURCE_*` keys to empty strings in non-clone services;
-`clone` retains its source access. This is essential for `porting-init`, which
-fails closed if any nonempty `SOURCE_*` value reaches it. When adapting a
-custom Compose, preserve those blank entries, or the initializer will report
-`The porting initializer must not receive SOURCE_* credentials or configuration.`
-Check the **raw generated** Compose in Coolify after saving. This redaction
-addresses the known source keys only: Coolify v4's global environment handling
-still prevents a general guarantee that *other* service secrets remain private
-between containers of the same resource. Keep this development deployment
-private; for strict per-container secret isolation, use separately scoped
-resources/a runtime without project-wide secret injection.
+into **every** container via `env_file`, even when a service does not declare
+those variables. The porting initializer deliberately ignores inherited
+`SOURCE_*` values instead of failing on them. Both porting Compose files also
+set the known source variables to empty strings in non-clone services as a
+best-effort reduction of accidental credential exposure. Do not rely on these
+entries as a security boundary: Coolify v4 can still expose project-wide secrets
+to other services. Keep this development deployment private; use separately
+scoped resources when strict per-container secret isolation is required.
 
 For ordinary Docker Compose, the additive equivalent is:
 

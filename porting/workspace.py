@@ -46,8 +46,8 @@ def read_secret(environment, name):
 
 
 def settings(environment):
-    if any(key.startswith('SOURCE_') and value for key, value in environment.items()):
-        raise PortingError('The porting initializer must not receive SOURCE_* credentials or configuration.')
+    # Coolify v4 can inject source variables into every container. Ignore them:
+    # this initializer only reads the local clone and its separate database.
     result = dict(host=environment.get('PORTING_DB_HOST', 'db'), port=environment.get('PORTING_DB_PORT', '3306'),
                   name=environment.get('PORTING_DB_NAME', 'warexo_port'), user=environment.get('PORTING_DB_USER', 'warexo_port'),
                   reference=environment.get('REFERENCE_DB_NAME', 'warexo'), password=read_secret(environment, 'PORTING_DB_PASSWORD'))

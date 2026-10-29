@@ -7,9 +7,11 @@ import pymysql
 import yaml
 
 ref, app = Path('/var/www/html'), Path('/workspace/warexo-port')
-assert not any(key.startswith('SOURCE_') for key in os.environ)
-assert 'DB_ADMIN_PASSWORD' not in os.environ
-assert not any(key in os.environ for key in ('http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY'))
+# Coolify v4 injects the shared .env; explicit empty service values must win.
+assert not any(key.startswith('SOURCE_') and value for key, value in os.environ.items())
+assert not os.environ.get('DB_ADMIN_PASSWORD'), 'Root database password must not reach application'
+proxy_keys = [key for key in ('http_proxy', 'https_proxy', 'HTTP_PROXY', 'HTTPS_PROXY') if os.environ.get(key)]
+assert not proxy_keys, 'Unintended nonempty proxy settings: ' + ', '.join(proxy_keys)
 assert (app / 'vendor/custom-patch.txt').read_bytes() == (ref / 'vendor/custom-patch.txt').read_bytes()
 assert (app / 'web/uploads/customer.txt').read_bytes() == (ref / 'web/uploads/customer.txt').read_bytes()
 assert (app / 'vendor/custom-patch.txt').stat().st_ino != (ref / 'vendor/custom-patch.txt').stat().st_ino

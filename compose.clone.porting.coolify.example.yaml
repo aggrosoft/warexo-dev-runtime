@@ -2,6 +2,19 @@
 # Equivalent to compose.clone.coolify.example.yaml + compose.porting.override.yaml.
 # Existing clone: keep the SAME Coolify resource/project and all existing volume mappings.
 # See PORTING.md before enabling; never replace reference volumes with new empty ones.
+# Coolify v4 automatically injects the project's .env into EVERY service.
+# Explicit empty environment entries override that env_file for non-clone services.
+# Keep this list in sync with the SOURCE_* inputs of the clone service.
+x-source-credentials-redacted: &source_credentials_redacted
+  SOURCE_SSH_HOST: ""
+  SOURCE_SSH_PORT: ""
+  SOURCE_SSH_USER: ""
+  SOURCE_SSH_PRIVATE_KEY: ""
+  SOURCE_SSH_KNOWN_HOSTS: ""
+  SOURCE_WAREXO_PATH: ""
+  SOURCE_PHP_BIN: ""
+  SOURCE_RSYNC_BWLIMIT_KB: ""
+
 services:
   clone:
     image: ${WAREXO_RUNTIME_IMAGE:-ghcr.io/aggrosoft/warexo-dev-runtime:main}
@@ -41,6 +54,8 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
+      DB_ADMIN_PASSWORD: '' # Coolify v4 env_file override; root DB secret is init-only
       WAREXO_BOOTSTRAP_MODE: clone
       AGGRO_SSH_ENABLED: 'true'
       DB_HOST: db
@@ -94,6 +109,7 @@ services:
     image: nginx:1.28-alpine
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
       SERVICE_URL_GATEWAY_80: /
       SERVICE_FQDN_GATEWAY: null
     entrypoint:
@@ -135,6 +151,7 @@ services:
     image: mariadb:10.11
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
       MARIADB_ROOT_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
       MARIADB_DATABASE: warexo
       MARIADB_USER: warexo
@@ -161,6 +178,7 @@ services:
     image: axllent/mailpit:latest
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
       MP_SMTP_BIND_ADDR: 0.0.0.0:25
     networks:
     - backend
@@ -173,6 +191,7 @@ services:
     - /opt/warexo/porting/workspace.py
     command: null
     environment:
+      <<: *source_credentials_redacted
       DB_ADMIN_PASSWORD: ${SERVICE_PASSWORD_64_DBROOT}
       REFERENCE_DB_NAME: warexo
       PORTING_DB_HOST: db
@@ -202,6 +221,7 @@ services:
     image: nginx:1.28-alpine
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
       SERVICE_URL_PORTING_GATEWAY_80: /
       SERVICE_FQDN_PORTING_GATEWAY: null
     entrypoint:
@@ -252,6 +272,7 @@ services:
     pull_policy: always
     restart: unless-stopped
     environment:
+      <<: *source_credentials_redacted
       PORTING_ALLOWED_HOSTS: ${PORTING_ALLOWED_HOSTS:-github.com api.github.com codeload.github.com raw.githubusercontent.com objects.githubusercontent.com release-assets.githubusercontent.com packagist.org repo.packagist.org getcomposer.org}
     networks:
     - backend

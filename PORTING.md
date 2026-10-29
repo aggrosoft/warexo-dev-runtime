@@ -85,12 +85,12 @@ refresh the porting database either.
 
 | Item | Reference | Porting work |
 | --- | --- | --- |
-| Code | `/var/www/html` | `/workspace/warexo-port` |
+| Code | `/var/www/html` | `/workspace/warexo-port` (isolated deployed snapshot) and `/workspace/repos/next` (clean Git target) |
 | PHP CLI | existing `php`, also `php74` | `php84` |
 | Composer | existing Composer 1 | `composer84`, using Composer 2 and PHP 8.4 |
 | Dependencies | existing reference `vendor` | separately copied `vendor`, then deliberately updated |
 | Database / user | `warexo` / `warexo` | `warexo_port` / `warexo_port` |
-| HTTP inside the container | Apache port 80 | Apache port 8084, local PHP-8.4-FPM |
+| HTTP inside the container | Apache port 80 | Apache port 8084, PHP-8.4-FPM serving `/workspace/repos/next/backend/public` |
 | Public ingress | `gateway` | optional `porting-gateway` |
 
 PHP 8.4 has separate INI files, extensions, cache/session/temp directories, and
@@ -98,6 +98,11 @@ process context. The porting entrypoint does **not** warm up the old application
 under PHP 8.4. Expect the old Symfony application to need code and dependency
 changes before its routes work. The porting health endpoint tests the PHP 8.4
 runtime only; a green health check is not proof of successful Warexo migration.
+The porting URL now serves the **clean Next checkout**, not the old copy at
+`/workspace/warexo-port/web`. Before Next is checked out and its dependencies
+are installed, application pages may return 404/500 while the PHP 8.4 runtime
+health endpoint remains green. No automatic checkout, Composer execution, or
+application bootstrap occurs at container start.
 
 Inside the existing SSH/IDE session:
 
@@ -108,10 +113,32 @@ composer84 --version
 warexo-port-status
 curl --fail http://127.0.0.1/__warexo_runtime_health
 curl --fail http://127.0.0.1:8084/__warexo_porting_health
+# After Next's checkout and vendor/ exist, check the modern Symfony page:
+curl -i http://127.0.0.1:8084/login
 ```
 
-Work on the porting copy, not `/var/www/html`. Invoke porting PHP explicitly;
-review hard-coded PHP paths and subprocess calls in Warexo too. A source-level
+The porting Apache vhost uses Symfony's `backend/public/index.php` as its
+front controller; missing asset paths route through Symfony, including the
+existing `/css/clients.css` and `/js/login_clients.js` customization hooks.
+PHP-FPM receives only allowlisted `APP_ENV`, `APP_DEBUG`, porting database and
+secret settings; `WAREXO_USER_ASSET_DIR` points to the isolated local copy at
+`/workspace/warexo-port/web`. The optional Compose sets `PORTING_APP_ENV=dev`
+and `PORTING_APP_DEBUG=0` (adjust only in a protected environment). PHP source
+changes are picked up without Docker rebuild because OPcache checks timestamps.
+With debug disabled, a Twig template/config change may require a scoped
+`php84 backend/bin/console cache:clear` from the clean Next checkout.
+
+In Coolify, assign the protected HTTPS domain to the **`porting-gateway`
+service on port 80**, never to `warexo` itself. This is separate from the
+PHP 7.4 `gateway` domain. SSL issuance and Traefik routes are managed by
+Coolify and still require correct DNS, service mapping and an operational proxy.
+An external `no available server` error is a proxy-routing issue even if the
+internal PHP 8.4 health URL works.
+
+Work on the clean Next checkout in `/workspace/repos/next`, never on
+`/var/www/html`. The separate `/workspace/warexo-port` is a deployed-source
+reference and user-asset store, not a Git worktree. Invoke porting PHP explicitly;
+review hard-coded PHP paths and subprocess calls in ported Warexo code too. A source-level
 absolute `/usr/bin/php` is not repaired merely by providing a `php84` command.
 
 ## Git and package access without opening the application network

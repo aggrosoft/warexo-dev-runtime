@@ -76,14 +76,20 @@ class WorkspaceTests(unittest.TestCase):
     def ready_connection(self, tables=None):
         return Connection([('warexo_port', 'DISABLED'), tables if tables is not None else [('users',), ('client',), ('product',)]])
 
-    def test_identifiers_and_source_credentials_fail_closed(self):
+    def test_identifiers_and_target_credentials_fail_closed(self):
         for key, value in [('PORTING_DB_NAME', 'warexo'), ('PORTING_DB_NAME', 'Warexo'),
                            ('PORTING_DB_NAME', 'mysql'), ('PORTING_DB_NAME', 'unsafe;DROP'),
                            ('PORTING_DB_USER', 'root'), ('PORTING_DB_USER', 'warexo'),
                            ('PORTING_DB_HOST', '-o option'), ('PORTING_DB_PORT', '0'),
-                           ('PORTING_DB_PASSWORD', ''), ('SOURCE_SSH_PRIVATE_KEY', 'not-allowed')]:
+                           ('PORTING_DB_PASSWORD', '')]:
             with self.subTest(key=key, value=value), self.assertRaises(workspace.PortingError):
                 workspace.settings(dict(self.environment, **{key: value}))
+
+    def test_coolify_source_environment_does_not_affect_local_porting_settings(self):
+        inherited = dict(self.environment, SOURCE_SSH_HOST='source.example.invalid',
+                         SOURCE_SSH_PRIVATE_KEY='credential-injected-by-coolify',
+                         SOURCE_WAREXO_PATH='/srv/live', SOURCE_COMMIT='rev123')
+        self.assertEqual(workspace.settings(inherited), self.config)
 
     def test_paths_reject_roots_nesting_and_symlinked_parents(self):
         for key, value in [('PORTING_WORKSPACE_DIR', '/'), ('PORTING_WORKSPACE_DIR', 'relative'),

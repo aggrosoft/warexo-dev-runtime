@@ -92,7 +92,7 @@ echo json_encode([
 (preview / 'preview.css').write_text('body { color: #123456; }\n')
 import pwd
 developer = pwd.getpwnam('developer')
-preview.chown(developer.pw_uid, developer.pw_gid)
+os.chown(preview, developer.pw_uid, developer.pw_gid)
 for name in ('index.php', 'preview.css'):
-    (preview / name).chown(developer.pw_uid, developer.pw_gid)
+    os.chown(preview / name, developer.pw_uid, developer.pw_gid)
 print('Independent workspace, clean Next preview, credentials, grants and mutations verified.')

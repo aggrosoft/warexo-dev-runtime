@@ -16,14 +16,17 @@ verify_porting_initial() {
     local porting_address result
     porting_address=$("${target_compose[@]}" port porting-gateway 80)
     [[ $(curl --fail --silent --max-time 10 "http://$porting_address/__warexo_porting_health") == php84-ready ]]
-    [[ $(curl --fail --silent --max-time 10 "http://$porting_address/") == 'warexo clone fixture' ]]
+    # Port 8084 serves a separate Next-style front controller, never Legacy's web/.
+    result=$(curl --fail --silent --max-time 10 "http://$porting_address/login?client=42")
+    python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["uri"] == "/login?client=42"; assert p["app_env"] == "dev"; assert p["app_debug"] == "0"; assert p["asset_dir"] == "/workspace/warexo-port/web"' "$result"
+    [[ $(curl --fail --silent --max-time 10 "http://$porting_address/preview.css") == 'body { color: #123456; }' ]]
     [[ $(curl --silent -o /dev/null -w '%{http_code}' "http://$porting_address/install.php") == 404 ]]
     result=$(curl --fail --silent --max-time 10 "http://$gateway_address/runtime-probe.php")
     python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 70400 <= p["version"] < 70500; assert p["database"] == "warexo"' "$result"
     result=$(curl --fail --silent --max-time 10 "http://$porting_address/runtime-probe.php")
-    python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 80400 <= p["version"] < 80500; assert p["database"] == "warexo_port"' "$result"
+    python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 80400 <= p["version"] < 80500; assert p["database"] == "warexo_port"; assert p["uri"] == "/runtime-probe.php"' "$result"
     result=$(curl --fail --silent --max-time 10 "http://$porting_address/porting-check.php")
-    python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 80400 <= p["version"] < 80500; assert p["child"].startswith("8.4."); assert p["session"].startswith("/workspace/"); assert p["database"] == "warexo_port"; assert p["has_proxy"] is False' "$result"
+    python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert 80400 <= p["version"] < 80500; assert p["child"].startswith("8.4."); assert p["session"].startswith("/workspace/"); assert p["database"] == "warexo_port"; assert p["has_proxy"] is False; assert p["uri"] == "/porting-check.php"' "$result"
 
     # The dependency proxy must actually work, not merely reject every request.
     "${target_compose[@]}" exec -T warexo warexo-net curl --fail --silent --show-error --max-time 45 \
@@ -57,6 +60,8 @@ db.close()
 assert Path('/workspace/warexo-port/web/porting-edit.txt').read_text() == 'retained porting file'
 assert not Path('/var/www/html/web/porting-edit.txt').exists()
 assert not Path('/workspace/warexo-port/web/local-edit.txt').exists()
+assert Path('/workspace/repos/next/backend/public/index.php').is_file()
+assert Path('/workspace/repos/next/backend/public/preview.css').read_text() == 'body { color: #123456; }\n'
 PY
     "${target_compose[@]}" exec -T warexo curl --fail --silent --max-time 5 http://127.0.0.1:8084/__warexo_porting_health
     # The opt-in image itself must also delegate unchanged when explicitly off.

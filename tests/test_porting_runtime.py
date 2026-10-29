@@ -118,6 +118,25 @@ class PortingRuntimeTests(unittest.TestCase):
                 process.kill()
                 process.communicate(timeout=3)
 
+    def test_browser_preview_serves_clean_next_checkout_with_symfony_fallback(self):
+        vhost = (ROOT / 'porting/apache84.conf').read_text()
+        pool = (ROOT / 'porting/php84-fpm.conf').read_text()
+        ini = (ROOT / 'porting/php84.ini').read_text()
+        self.assertIn('DocumentRoot /workspace/repos/next/backend/public', vhost)
+        self.assertIn('<Directory /workspace/repos/next/backend/public>', vhost)
+        self.assertIn('FallbackResource /index.php', vhost)
+        self.assertIn('DirectoryIndex index.php', vhost)
+        self.assertIn('Alias /__warexo_porting_health', vhost)
+        self.assertNotIn('DocumentRoot /workspace/warexo-port/web', vhost)
+        self.assertIn('clear_env = yes', pool)
+        self.assertIn('env[APP_ENV] = $PORTING_APP_ENV', pool)
+        self.assertIn('env[APP_DEBUG] = $PORTING_APP_DEBUG', pool)
+        self.assertIn('env[WAREXO_USER_ASSET_DIR] = /workspace/warexo-port/web', pool)
+        self.assertNotIn('env[SOURCE_', pool)
+        self.assertIn('variables_order = EGPCS', ini)
+        self.assertIn('opcache.validate_timestamps = 1', ini)
+        self.assertIn('opcache.revalidate_freq = 0', ini)
+
     def test_php84_has_own_ini_path_and_only_porting_db_environment(self):
         wrapper = self.render('porting/bin/php84', self.local / 'php84')
         self.command(self.php84 / 'bin/php',

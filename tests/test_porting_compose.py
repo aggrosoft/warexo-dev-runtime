@@ -93,6 +93,15 @@ class PortingComposeTests(unittest.TestCase):
             for volume in service.get('volumes', []):
                 self.assertNotIn('docker.sock', volume)
 
+    def test_preview_environment_is_scoped_to_the_porting_application(self):
+        app = self.services['warexo']['environment']
+        self.assertEqual(app['PORTING_APP_ENV'], '${PORTING_APP_ENV:-dev}')
+        self.assertEqual(app['PORTING_APP_DEBUG'], '${PORTING_APP_DEBUG:-0}')
+        self.assertNotIn('PORTING_APP_ENV', self.base['services']['warexo']['environment'])
+        self.assertNotIn('PORTING_APP_DEBUG', self.base['services']['warexo']['environment'])
+        self.assertNotIn('PORTING_APP_ENV', self.services['porting-init']['environment'])
+        self.assertNotIn('PORTING_APP_DEBUG', self.services['porting-init']['environment'])
+
     def test_initializer_only_reads_reference_and_gates_app_start(self):
         init = self.services['porting-init']
         self.assertEqual(init['networks'], ['backend'])

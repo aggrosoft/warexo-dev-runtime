@@ -69,4 +69,30 @@ echo json_encode([
 ''')
 marker = json.loads(Path('/workspace/.warexo-porting-ready.json').read_text())
 assert 'password' not in json.dumps(marker).lower()
-print('Independent workspace, vendor data, credentials, grants and mutations verified.')
+# The porting HTTP endpoint must serve a clean Next checkout, not legacy web/.
+# The test fixture intentionally mimics Next's backend/public front-controller.
+preview = Path('/workspace/repos/next/backend/public')
+preview.mkdir(parents=True, exist_ok=True)
+(preview / 'index.php').write_text("""<?php
+header('Content-Type: application/json');
+class VersionProbe { public private(set) string $value = 'php84'; }
+new VersionProbe();
+echo json_encode([
+    'version' => PHP_VERSION_ID,
+    'child' => trim(shell_exec('php -r ' . escapeshellarg('echo PHP_VERSION;'))),
+    'session' => ini_get('session.save_path'),
+    'database' => getenv('DB_NAME'),
+    'has_proxy' => (bool) (getenv('HTTP_PROXY') ?: getenv('HTTPS_PROXY')),
+    'app_env' => getenv('APP_ENV'),
+    'app_debug' => getenv('APP_DEBUG'),
+    'asset_dir' => getenv('WAREXO_USER_ASSET_DIR'),
+    'uri' => $_SERVER['REQUEST_URI'],
+]);
+""")
+(preview / 'preview.css').write_text('body { color: #123456; }\n')
+import pwd
+developer = pwd.getpwnam('developer')
+preview.chown(developer.pw_uid, developer.pw_gid)
+for name in ('index.php', 'preview.css'):
+    (preview / name).chown(developer.pw_uid, developer.pw_gid)
+print('Independent workspace, clean Next preview, credentials, grants and mutations verified.')

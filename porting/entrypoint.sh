@@ -24,7 +24,13 @@ python3 /opt/warexo/porting/workspace.py --verify-ready
 mkdir -p /workspace/.runtime/php84/{sessions,tmp,cache,logs}
 chown developer:developer /workspace/.runtime/php84 /workspace/.runtime/php84/{sessions,tmp,cache,logs}
 a2enmod proxy proxy_fcgi
-cp /opt/warexo/porting/apache84.conf /etc/apache2/sites-available/warexo-porting.conf
+# Only the PHP 8.4 vhost changes. Keep PHP 7.4 and its deployed files on port 80.
+case "${WAREXO_PORTING_TARGET:-next}" in
+    next) porting_vhost=/opt/warexo/porting/apache84.conf ;;
+    aggrowawi) porting_vhost=/opt/warexo/porting/apache84-legacy.conf ;;
+    *) echo '[warexo-porting] WAREXO_PORTING_TARGET must be next or aggrowawi.' >&2; exit 1 ;;
+esac
+cp "$porting_vhost" /etc/apache2/sites-available/warexo-porting.conf
 ln -sf /etc/apache2/sites-available/warexo-porting.conf /etc/apache2/sites-enabled/warexo-porting.conf
 
 # Separate process groups allow shutdown during Legacy warmup as well as while

@@ -25,6 +25,7 @@ services:
       <<: *source_credentials_redacted
       DB_ADMIN_PASSWORD: "" # Coolify v4 env_file override; root DB secret is init-only
       WAREXO_PORTING_ENABLED: "1"
+      WAREXO_PORTING_TARGET: ${WAREXO_PORTING_TARGET:-next}
       PORTING_APP_ENV: ${PORTING_APP_ENV:-dev}
       PORTING_APP_DEBUG: ${PORTING_APP_DEBUG:-0}
       PORTING_DB_HOST: db

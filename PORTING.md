@@ -85,12 +85,12 @@ refresh the porting database either.
 
 | Item | Reference | Porting work |
 | --- | --- | --- |
-| Code | `/var/www/html` | `/workspace/warexo-port` (isolated deployed snapshot) and `/workspace/repos/next` (clean Git target) |
+| Code | `/var/www/html` | `/workspace/warexo-port` (isolated deployed snapshot), `/workspace/repos/next` or `/workspace/repos/aggrowawi-php84` (selected clean Git checkout) |
 | PHP CLI | existing `php`, also `php74` | `php84` |
 | Composer | existing Composer 1 | `composer84`, using Composer 2 and PHP 8.4 |
 | Dependencies | existing reference `vendor` | separately copied `vendor`, then deliberately updated |
 | Database / user | `warexo` / `warexo` | `warexo_port` / `warexo_port` |
-| HTTP inside the container | Apache port 80 | Apache port 8084, PHP-8.4-FPM serving `/workspace/repos/next/backend/public` |
+| HTTP inside the container | Apache port 80 | Apache port 8084, PHP-8.4-FPM serving the selected checkout only |
 | Public ingress | `gateway` | optional `porting-gateway` |
 
 PHP 8.4 has separate INI files, extensions, cache/session/temp directories, and
@@ -98,11 +98,16 @@ process context. The porting entrypoint does **not** warm up the old application
 under PHP 8.4. Expect the old Symfony application to need code and dependency
 changes before its routes work. The porting health endpoint tests the PHP 8.4
 runtime only; a green health check is not proof of successful Warexo migration.
-The porting URL now serves the **clean Next checkout**, not the old copy at
-`/workspace/warexo-port/web`. Before Next is checked out and its dependencies
-are installed, application pages may return 404/500 while the PHP 8.4 runtime
-health endpoint remains green. No automatic checkout, Composer execution, or
-application bootstrap occurs at container start.
+The porting URL serves the selected **clean Git checkout**, not the PHP 7.4
+reference at `/var/www/html` or the deployed snapshot in `/workspace/warexo-port`.
+`WAREXO_PORTING_TARGET=next` (the default) serves `/workspace/repos/next/backend/public`.
+`WAREXO_PORTING_TARGET=aggrowawi` serves `/workspace/repos/aggrowawi-php84/web`
+and uses the original `web/app.php` front controller. The PHP 7.4 gateway and
+all existing volumes remain unchanged in either mode. The chosen checkout must
+be prepared before switching the target in Coolify. Without that checkout or
+compatible dependencies, application pages can return 404/500 while the PHP
+8.4 health endpoint stays green. No automatic checkout, Composer execution,
+or application bootstrap occurs at container start.
 
 Inside the existing SSH/IDE session:
 
@@ -113,20 +118,25 @@ composer84 --version
 warexo-port-status
 curl --fail http://127.0.0.1/__warexo_runtime_health
 curl --fail http://127.0.0.1:8084/__warexo_porting_health
-# After Next's checkout and vendor/ exist, check the modern Symfony page:
+# After the selected checkout and its dependencies are prepared:
 curl -i http://127.0.0.1:8084/login
 ```
 
-The porting Apache vhost uses Symfony's `backend/public/index.php` as its
-front controller; missing asset paths route through Symfony, including the
-existing `/css/clients.css` and `/js/login_clients.js` customization hooks.
-PHP-FPM receives only allowlisted `APP_ENV`, `APP_DEBUG`, porting database and
-secret settings; `WAREXO_USER_ASSET_DIR` points to the isolated local copy at
+In `next` mode the porting Apache uses Symfony's `backend/public/index.php`;
+missing assets route through Symfony's existing customization hooks. In
+`aggrowawi` mode it uses `web/app.php` with Apache fallback routing and
+ignores the historic `.htaccess`. The PHP 8.4 preview blocks direct
+installation, development, restore and update endpoints, including Legacy's
+`/updates/composer` schema-update command. This is not a blanket sandbox for
+other Legacy HTTP side effects: keep the preview access-restricted, review
+integrations and jobs, and use only an isolated database.
+PHP-FPM receives allowlisted preview database and secret settings;
+`WAREXO_USER_ASSET_DIR` points to the isolated local copy at
 `/workspace/warexo-port/web`. The optional Compose sets `PORTING_APP_ENV=dev`
-and `PORTING_APP_DEBUG=0` (adjust only in a protected environment). PHP source
-changes are picked up without Docker rebuild because OPcache checks timestamps.
-With debug disabled, a Twig template/config change may require a scoped
-`php84 backend/bin/console cache:clear` from the clean Next checkout.
+and `PORTING_APP_DEBUG=0` (for Next only). The original aggrowawi reads
+`app/config/parameters.yml`: provide a separate untracked copy configured for
+the isolated porting database; never reuse production credentials. PHP changes
+are picked up without rebuilding the image because OPcache checks timestamps.
 
 In Coolify, assign the protected HTTPS domain to the **`porting-gateway`
 service on port 80**, never to `warexo` itself. This is separate from the
@@ -135,7 +145,7 @@ Coolify and still require correct DNS, service mapping and an operational proxy.
 An external `no available server` error is a proxy-routing issue even if the
 internal PHP 8.4 health URL works.
 
-Work on the clean Next checkout in `/workspace/repos/next`, never on
+Work on the selected clean checkout in `/workspace/repos`, never on
 `/var/www/html`. The separate `/workspace/warexo-port` is a deployed-source
 reference and user-asset store, not a Git worktree. Invoke porting PHP explicitly;
 review hard-coded PHP paths and subprocess calls in ported Warexo code too. A source-level
@@ -157,10 +167,17 @@ For example, using an already configured HTTPS repository credential helper:
 ```bash
 mkdir -p /workspace/repos
 warexo-net git clone https://github.com/warexo/next.git /workspace/repos/next
+# For the original application's PHP 8.4 compatibility branch instead:
+warexo-net git clone --branch port/php84-compat --single-branch \
+  https://github.com/warexo/aggrowawi.git /workspace/repos/aggrowawi-php84
 ```
 
-Clone Legacy from its established repository URL in the same way; the runtime
-does not guess that URL or repurpose source-installation credentials. Private
+Do not switch `WAREXO_PORTING_TARGET=aggrowawi` in Coolify until the Git checkout
+exists and its ignored `app/config/parameters.yml` is configured for a
+separate porting database. The existing `warexo_port` account is read-only;
+test writes require a separately authorized, isolated writable copy.
+Do not run setup/install/update scripts as part of switching the runtime.
+The runtime does not repurpose source-installation credentials. Private
 repositories still require your normal repository authorization. Do not put
 tokens in command-line URLs, images, or tracked files. Missing authorization is
 a blocker, not a reason to inspect the source importer's secrets.

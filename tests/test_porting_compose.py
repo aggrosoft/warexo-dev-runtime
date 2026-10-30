@@ -102,6 +102,29 @@ class PortingComposeTests(unittest.TestCase):
         self.assertNotIn('PORTING_APP_ENV', self.services['porting-init']['environment'])
         self.assertNotIn('PORTING_APP_DEBUG', self.services['porting-init']['environment'])
 
+    def test_selectable_aggrowawi_php84_vhost_keeps_next_as_default(self):
+        app = self.services['warexo']['environment']
+        self.assertEqual(app['WAREXO_PORTING_TARGET'], '${WAREXO_PORTING_TARGET:-next}')
+        self.assertEqual(self.extra['services']['warexo']['environment']['WAREXO_PORTING_TARGET'],
+                         app['WAREXO_PORTING_TARGET'])
+        self.assertNotIn('WAREXO_PORTING_TARGET', self.base['services']['warexo']['environment'])
+        entrypoint = (ROOT / 'porting/entrypoint.sh').read_text()
+        self.assertIn('WAREXO_PORTING_TARGET:-next', entrypoint)
+        self.assertIn('apache84-legacy.conf', entrypoint)
+        self.assertIn('apache84.conf', entrypoint)
+
+        next_vhost = (ROOT / 'porting/apache84.conf').read_text()
+        legacy_vhost = (ROOT / 'porting/apache84-legacy.conf').read_text()
+        self.assertIn('DocumentRoot /workspace/repos/next/backend/public', next_vhost)
+        self.assertIn('DirectoryIndex index.php', next_vhost)
+        self.assertIn('DocumentRoot /workspace/repos/aggrowawi-php84/web', legacy_vhost)
+        self.assertIn('<Directory /workspace/repos/aggrowawi-php84/web>', legacy_vhost)
+        self.assertIn('DirectoryIndex app.php', legacy_vhost)
+        self.assertIn('FallbackResource /app.php', legacy_vhost)
+        self.assertIn('updates', legacy_vhost)
+        self.assertNotIn('/var/www/html', legacy_vhost)
+        self.assertNotIn('backend/public', legacy_vhost)
+
     def test_initializer_only_reads_reference_and_gates_app_start(self):
         init = self.services['porting-init']
         self.assertEqual(init['networks'], ['backend'])

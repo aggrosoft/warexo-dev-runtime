@@ -126,6 +126,11 @@ jobs:
       - name: Validate PHP helper
         run: docker run --rm --entrypoint php warexo-runtime:test -l /opt/warexo/clone/source_database.php
 
+      - name: Verify headless LibreOffice via PHP exec
+        run: |
+          docker run --rm --user developer --entrypoint php warexo-runtime:test \
+            -r 'exec("soffice --headless --version 2>&1", $output, $status); echo implode("\n", $output), "\n"; exit($status);'
+
       - name: Verify SSH clone lifecycle and isolation
         env:
           WAREXO_RUNTIME_IMAGE: warexo-runtime:test

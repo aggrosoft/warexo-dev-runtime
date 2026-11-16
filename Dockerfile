@@ -24,6 +24,7 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update \
     && apt-get install -y --no-install-recommends \
         curl \
         default-mysql-client \
+        fonts-liberation \
         git \
         libcurl4-openssl-dev \
         libfreetype6-dev \
@@ -33,6 +34,7 @@ RUN apt-get -o Acquire::Check-Valid-Until=false update \
         libpng-dev \
         libxml2-dev \
         libzip-dev \
+        libreoffice-nogui \
         openssh-client \
         python3 \
         python3-pymysql \

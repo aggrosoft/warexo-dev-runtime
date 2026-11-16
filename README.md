@@ -29,6 +29,7 @@ The image intentionally keeps the legacy application stack stable:
 - PHP 7.4 + Apache
 - Symfony production environment
 - Composer 1 for the committed legacy lock file
+- headless LibreOffice (`soffice` on `PATH`, callable via PHP `exec()`)
 - MariaDB 10.11 in the Coolify template
 - Mailpit for development mail
 - no Warexo cron jobs by default

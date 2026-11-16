@@ -6,7 +6,9 @@ services:
     pull_policy: always
     restart: "no"
     entrypoint: ["python3", "/opt/warexo/clone/import_source.py"]
-    command: []
+    # Coolify's Compose validator rejects an empty list here. The explicit
+    # entrypoint already suppresses the image's default CMD.
+    command: null
     environment:
       SOURCE_SSH_HOST: ${SOURCE_SSH_HOST:?Set source SSH hostname}
       SOURCE_SSH_PORT: ${SOURCE_SSH_PORT:-22}
@@ -93,6 +95,9 @@ services:
           client_max_body_size 128m;
           location ~ ^/(install|app_dev|restore)(\.php|/|$$) { return 404; }
           location / {
+            # Legacy Warexo may return large response headers on edit pages.
+            proxy_buffer_size 128k;
+            proxy_buffers 4 128k;
             proxy_pass http://warexo:80;
             proxy_set_header Host $$http_host;
             proxy_set_header X-Forwarded-Proto $$warexo_proto;
